@@ -12,6 +12,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   além de hábitos numéricos com meta diária.
 - **Tarefas**: listas com prazo, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
+- **Backup**: em Ajustes, copiar todos os dados como texto e restaurar colando esse texto.
+  O app confere o que foi colado e pede confirmação antes de substituir.
 
 ## Como rodar
 
@@ -66,6 +68,8 @@ pwsh tools/apk.ps1 -AceitoLicencaAndroid
 - No fim o script apaga do Docker tudo o que criou (imagem, volume e construtor de build) e
   nada além disso. Para vários builds seguidos, use `-Manter` e termine com `-Limpar`.
 - `-Simular` mostra os comandos sem executar.
+- `-Tipo debug` gera `saida/foco-debug.apk`: o mesmo app, com a mesma chave, mas
+  inspecionável pelo cabo USB. Um instala por cima do outro sem apagar os dados.
 
 ## Portão de qualidade
 
@@ -93,6 +97,7 @@ O código tem duas camadas, e o lint impede que elas se misturem.
 www/js/nucleo/          lógica pura: roda sem navegador, não toca DOM nem armazenamento
   esquema.js            formato dos dados e a validação que impõe esse formato
   estado.js             leitura do estado salvo: JSON, migração e validação
+  backup.js             conferência do texto de backup antes de restaurar
   migracao.js           atualização de dados de versões anteriores
   rotina-texto.js       conversão entre o texto do editor e os itens da rotina
   prazos.js             ordenação e agrupamento das tarefas por prazo

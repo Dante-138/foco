@@ -325,6 +325,100 @@ test('duas abas: o que uma grava aparece na outra, sem sobrescrever', async (t) 
   assert.deepEqual(erros, []);
 });
 
+// --------------------------------------------------------------------- backup
+
+test('backup: os dados copiados em um aparelho são restaurados em outro', async (t) => {
+  // Aparelho de origem: um hábito, e a cópia dos dados para a área de transferência.
+  const origem = await abrir(t);
+  await origem.pagina.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: url });
+  await botao(origem.pagina, 'Hábitos').click();
+  await botao(origem.pagina, 'Novo hábito').click();
+  await origem.pagina.getByLabel('Nome').fill('Leitura');
+  await botao(origem.pagina, 'Salvar').click();
+  await botao(origem.pagina, 'Leitura, hoje: não feito').click();
+  await visivel(botao(origem.pagina, 'Leitura, hoje: feito'));
+
+  await botao(origem.pagina, 'Ajustes').click();
+  await botao(origem.pagina, 'Copiar dados').click();
+  await visivel(origem.pagina.getByText('Dados copiados: 0 rotinas, 1 hábito, 0 tarefas.'));
+  const copiado = await origem.pagina.evaluate(() => navigator.clipboard.readText());
+  assert.equal(JSON.parse(copiado).habitos[0].nome, 'Leitura');
+
+  // Aparelho de destino: vazio, restaura colando o texto.
+  const destino = await abrir(t);
+  await botao(destino.pagina, 'Ajustes').click();
+  await botao(destino.pagina, 'Colar para restaurar').click();
+  await destino.pagina.getByLabel('Texto do backup').fill(copiado);
+  await botao(destino.pagina, 'Conferir').click();
+  await visivel(
+    destino.pagina.getByText('Substituir os dados deste aparelho por 0 rotinas, 1 hábito, 0 tarefas?'),
+  );
+  await botao(destino.pagina, 'Substituir').click();
+
+  await visivel(destino.pagina.getByText('Dados restaurados.'));
+  await visivel(botao(destino.pagina, 'Leitura, hoje: feito')); // abriu na aba que estava no backup
+  assert.equal(await destino.pagina.locator('dialog').count(), 0);
+
+  await destino.pagina.reload();
+  await visivel(botao(destino.pagina, 'Leitura, hoje: feito'));
+  assert.deepEqual([...origem.erros, ...destino.erros], []);
+});
+
+test('restaurar recusa texto que não é backup e não mexe nos dados', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+  const antes = await lerSalvo(pagina, CHAVE);
+
+  await botao(pagina, 'Ajustes').click();
+  await botao(pagina, 'Colar para restaurar').click();
+  const campoDeTexto = pagina.getByLabel('Texto do backup');
+
+  for (const [texto, recusa] of [
+    ['', 'Cole o texto do backup no campo acima.'],
+    ['isto não é json', 'Não consegui ler este texto. Confira se ele foi copiado inteiro.'],
+    ['{}', 'Este texto não tem dados do Foco (rotinas, hábitos ou tarefas).'],
+    ['{"versao":99,"habitos":[]}', /versão mais nova do app/],
+  ]) {
+    await campoDeTexto.fill(texto);
+    await botao(pagina, 'Conferir').click();
+    await visivel(pagina.getByRole('alert').filter({ hasText: recusa }));
+  }
+
+  // Backup válido, mas a pessoa desiste na confirmação: nada muda.
+  await campoDeTexto.fill('{"habitos":[{"id":"x","nome":"Outro","cor":"rosa","tipo":"simnao"}]}');
+  await botao(pagina, 'Conferir').click();
+  await visivel(pagina.getByText(/Substituir os dados deste aparelho por/));
+  await pagina.locator('dialog[open]').last().getByRole('button', { name: 'Cancelar', exact: true }).click();
+
+  assert.equal(await lerSalvo(pagina, CHAVE), antes);
+  assert.equal(await lerSalvo(pagina, CHAVE_COPIA), null);
+  assert.deepEqual(erros, []);
+});
+
+test('restaurar guarda os dados anteriores na cópia de segurança', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Vai ser substituído');
+  await botao(pagina, 'Salvar').click();
+  const antes = await lerSalvo(pagina, CHAVE);
+
+  await botao(pagina, 'Ajustes').click();
+  await botao(pagina, 'Colar para restaurar').click();
+  await pagina
+    .getByLabel('Texto do backup')
+    .fill('{"aba":"habitos","habitos":[{"id":"x","nome":"Novo","cor":"rosa","tipo":"simnao"}]}');
+  await botao(pagina, 'Conferir').click();
+  await botao(pagina, 'Substituir').click();
+
+  await visivel(botao(pagina, 'Novo, hoje: não feito'));
+  assert.equal(await lerSalvo(pagina, CHAVE_COPIA), antes);
+  assert.deepEqual(erros, []);
+});
+
 // --------------------------------------------------------------- botão voltar
 
 test('voltar fecha a folha aberta em vez de sair do app', async (t) => {
