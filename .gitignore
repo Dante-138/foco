@@ -1,0 +1,4 @@
+# Prints pessoais usados como referência de design: não vão para o repositório
+referencias/
+
+node_modules/
