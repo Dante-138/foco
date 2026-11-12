@@ -7,10 +7,21 @@ export const JANELA_ANEL = 7; // dias considerados no anel de progresso
 
 export const formatar = (n) => String(n).replace('.', ',');
 
-// Aceita vírgula ou ponto. Devolve null para texto inválido ou número negativo.
+const COM_MILHAR = /^[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/; // 1.500 ou 10.000,5
+const SIMPLES = /^\d+([.,]\d+)?$/; // 1500, 1,5 ou 1.5
+
+// Lê um número digitado, no costume brasileiro:
+// - vírgula é sempre decimal ("1,5");
+// - ponto seguido de exatamente três dígitos é milhar ("1.500" = 1500, "10.000,5" = 10000,5);
+// - qualquer outro ponto é decimal ("1.5" = 1,5; "0.500" = 0,5).
+// Devolve null para o que não for número puro: vazio, negativo, "2abc", "1e3".
 export function lerNumero(texto) {
-  const n = Number.parseFloat(String(texto).trim().replace(',', '.'));
-  return Number.isFinite(n) && n >= 0 ? n : null;
+  const t = String(texto).trim();
+  let n;
+  if (COM_MILHAR.test(t)) n = Number(t.replaceAll('.', '').replace(',', '.'));
+  else if (SIMPLES.test(t)) n = Number(t.replace(',', '.'));
+  else return null;
+  return Number.isFinite(n) ? n : null;
 }
 
 export const metaDe = (habito) => habito.meta ?? 1;

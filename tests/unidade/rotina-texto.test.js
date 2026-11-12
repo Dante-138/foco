@@ -1,15 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { textoParaItens, itensParaTexto } from '../www/js/rotina-texto.js';
+import { textoParaItens, itensParaTexto } from '../../www/js/nucleo/rotina-texto.js';
+import { LIMITES } from '../../www/js/nucleo/esquema.js';
 
 // Gerador de ids previsível: n1, n2, n3...
 function contador() {
   let n = 0;
-  return () => `n${(n += 1)}`;
+  return () => {
+    n += 1;
+    return `n${n}`;
+  };
 }
 
 const ler = (texto, antigos = []) => textoParaItens(texto, antigos, contador());
 const semId = (itens) => itens.map(({ tipo, texto, hora }) => ({ tipo, texto, hora }));
+const textos = (entrada) => ler(entrada).map((i) => i.texto);
 
 test('linhas viram itens, "#" abre seção e linhas em branco são ignoradas', () => {
   const itens = ler('# MANHÃ\n\nAcordar\n   \nArrumar a cama');
@@ -18,6 +23,11 @@ test('linhas viram itens, "#" abre seção e linhas em branco são ignoradas', (
     { tipo: 'item', texto: 'Acordar', hora: null },
     { tipo: 'item', texto: 'Arrumar a cama', hora: null },
   ]);
+});
+
+test('sem gerador informado, os ids vêm do gerador padrão e são únicos', () => {
+  const itens = textoParaItens('Um\nDois\nTrês');
+  assert.equal(new Set(itens.map((i) => i.id)).size, 3);
 });
 
 test('horário no começo da linha vira o campo hora, com zero à esquerda', () => {
@@ -41,11 +51,14 @@ test('horário impossível fica como texto comum', () => {
 });
 
 test('horário sem texto depois não vira item vazio', () => {
-  assert.deepEqual(semId(ler('22:30')), [{ tipo: 'item', texto: '22:30', hora: null }]);
+  assert.deepEqual(semId(ler('22:30\n22:31 -')), [
+    { tipo: 'item', texto: '22:30', hora: null },
+    { tipo: 'item', texto: '22:31 -', hora: null },
+  ]);
 });
 
 test('marcadores de checklist colado de outro app são removidos', () => {
-  const itens = ler('[ ] Leitura\n[x] 22:00 Sair\n- Banho\n• Jantar\n☐ Dormir');
+  const itens = ler('[ ] Leitura\n[x] 22:00 Sair\n- Banho\n• Jantar\n☐ Dormir\n[] Estudar\n* Treinar');
   assert.deepEqual(
     itens.map((i) => [i.hora, i.texto]),
     [
@@ -54,8 +67,26 @@ test('marcadores de checklist colado de outro app são removidos', () => {
       [null, 'Banho'],
       [null, 'Jantar'],
       [null, 'Dormir'],
+      [null, 'Estudar'],
+      [null, 'Treinar'],
     ],
   );
+});
+
+test('lista de tarefas em Markdown ("- [ ] item") perde o hífen e a caixa', () => {
+  assert.deepEqual(semId(ler('- [ ] 22:30 Chegar em casa\n- [x] Leitura\n* [ ] Banho')), [
+    { tipo: 'item', texto: 'Chegar em casa', hora: '22:30' },
+    { tipo: 'item', texto: 'Leitura', hora: null },
+    { tipo: 'item', texto: 'Banho', hora: null },
+  ]);
+});
+
+test('hífen ou asterisco sem espaço depois faz parte do texto', () => {
+  assert.deepEqual(textos('-5 graus lá fora\n*importante*'), ['-5 graus lá fora', '*importante*']);
+});
+
+test('linha só com marcadores é ignorada', () => {
+  assert.deepEqual(textos('- \n[ ]\n- [ ] \nItem'), ['Item']);
 });
 
 test('quebra de linha do Windows (CRLF) é aceita', () => {
@@ -63,10 +94,21 @@ test('quebra de linha do Windows (CRLF) é aceita', () => {
 });
 
 test('"#" sozinho não cria seção sem nome', () => {
+  assert.deepEqual(textos('#\n##   \nItem'), ['Item']);
+});
+
+test('texto de item e de seção é cortado no limite', () => {
+  const longo = 'a'.repeat(LIMITES.textoItem + 50);
+  const itens = ler(`${longo}\n# ${longo}\n10:00 ${longo}`);
   assert.deepEqual(
-    ler('#\n##   \nItem').map((i) => i.texto),
-    ['Item'],
+    itens.map((i) => i.texto.length),
+    [LIMITES.textoItem, LIMITES.textoItem, LIMITES.textoItem],
   );
+});
+
+test('linhas além do limite de itens da rotina são descartadas', () => {
+  const texto = Array.from({ length: LIMITES.itensPorRotina + 30 }, (_, n) => `Item ${n}`).join('\n');
+  assert.equal(ler(texto).length, LIMITES.itensPorRotina);
 });
 
 test('editar preserva o id de quem manteve o texto, mesmo mudando o horário', () => {
@@ -94,12 +136,21 @@ test('itens com o mesmo texto recebem ids diferentes e são reaproveitados em or
   );
 });
 
+test('seção e item com o mesmo texto não trocam de id entre si', () => {
+  const antes = ler('# Estudo\nEstudo');
+  const depois = textoParaItens('Estudo\n# Estudo', antes, () => 'novo');
+  assert.deepEqual(
+    depois.map((i) => i.id),
+    [antes[1].id, antes[0].id],
+  );
+});
+
 test('itensParaTexto separa as seções com linha em branco', () => {
   const texto = '# MANHÃ\n06:30 Acordar\nArrumar a cama\n\n# TRABALHO\n09:00 Bater o ponto';
   assert.equal(itensParaTexto(ler(texto)), texto);
 });
 
 test('texto -> itens -> texto -> itens mantém o conteúdo', () => {
-  const itens = ler('[ ] 7:00 Café\n# TARDE\n- Estudar');
+  const itens = ler('- [ ] 7:00 Café\n# TARDE\n- Estudar\n25:00 Hora inválida\n-5 graus');
   assert.deepEqual(semId(ler(itensParaTexto(itens))), semId(itens));
 });

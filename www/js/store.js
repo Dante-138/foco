@@ -1,57 +1,53 @@
 // Estado do app e persistência.
-// Tudo que toca o armazenamento fica neste arquivo: quando a casca Android
+// Único módulo de dados que toca o armazenamento: quando a casca Android
 // entrar, a troca de localStorage por arquivo ou SQLite acontece só aqui.
+// Toda leitura passa pela migração e pela validação (nucleo/estado.js), então
+// o resto do app recebe sempre um estado no formato descrito em nucleo/esquema.js.
 
-import { uid } from './ids.js';
-import { hoje } from './datas.js';
-import { VERSAO, migrar } from './migracao.js';
+import { uid } from './nucleo/ids.js';
+import { hoje } from './nucleo/datas.js';
+import { PROBLEMA, lerEstado } from './nucleo/estado.js';
 
-const CHAVE = 'foco:v1';
+export const CHAVE = 'foco:v1';
 
-// rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora }] }]
-// marcasRotina: { data: 'AAAA-MM-DD', porRotina: { rotinaId: [itemId] } }  (só o dia corrente)
-// habitos:      [{ id, nome, cor (chave da paleta), tipo: 'simnao' | 'numero', unidade, meta }]
-// registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número } }
-// listas:       [{ id, nome }]
-// tarefas:      [{ id, listaId, titulo, notas, prazo: 'AAAA-MM-DD' | null,
-//                  estrela, feita, criadaEm, feitaEm }]
-
-function estadoInicial() {
-  const lista = { id: uid(), nome: 'Minhas tarefas' };
-  return {
-    versao: VERSAO,
-    aba: 'rotinas',
-    rotinas: [],
-    rotinaAtiva: null,
-    marcasRotina: { data: hoje(), porRotina: {} },
-    habitos: [],
-    registros: {},
-    listas: [lista],
-    listaAtiva: lista.id,
-    tarefas: [],
-  };
-}
+// Guarda o último conteúdo salvo que estava ilegível ou precisou de correção,
+// antes que o próximo salvar() grave por cima.
+const CHAVE_COPIA = `${CHAVE}:copia`;
 
 function carregar() {
   let bruto = null;
   try {
     bruto = localStorage.getItem(CHAVE);
-    if (bruto) return migrar({ ...estadoInicial(), ...JSON.parse(bruto) });
   } catch (erro) {
-    console.error('Falha ao ler os dados salvos', erro);
-    // Guarda o conteúdo ilegível antes que o próximo salvar() o sobrescreva.
+    console.error('Armazenamento indisponível', erro);
+  }
+
+  const leitura = lerEstado(bruto, { dia: hoje(), gerarId: uid });
+
+  if (leitura.problema === PROBLEMA.ILEGIVEL || leitura.avisos.length) {
+    console.warn('Dados salvos com problema:', leitura.problema ?? leitura.avisos);
     try {
-      if (bruto) localStorage.setItem(`${CHAVE}:ilegivel`, bruto);
+      localStorage.setItem(CHAVE_COPIA, bruto);
     } catch {
-      /* sem espaço para a cópia: segue com o estado inicial */
+      /* sem espaço para a cópia: segue sem ela */
     }
   }
-  return estadoInicial();
+  return leitura;
 }
 
-export const estado = carregar();
+const leitura = carregar();
+
+export const estado = leitura.estado;
+
+// null quando a leitura deu certo; senão, um valor de PROBLEMA (nucleo/estado.js).
+export const problemaDeCarga = leitura.problema;
+
+// Quantas correções a validação precisou fazer nos dados salvos.
+export const correcoesNaCarga = leitura.avisos.length;
 
 export function salvar() {
+  // Dados gravados por uma versão mais nova do app nunca são sobrescritos.
+  if (problemaDeCarga === PROBLEMA.VERSAO_MAIS_NOVA) return;
   try {
     localStorage.setItem(CHAVE, JSON.stringify(estado));
   } catch (erro) {

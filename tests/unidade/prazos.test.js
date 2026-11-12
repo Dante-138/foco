@@ -1,11 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agrupar, porPrazo, rotuloData } from '../www/js/prazos.js';
+import { agrupar, porPrazo, rotuloData } from '../../www/js/nucleo/prazos.js';
 
 const HOJE = '2026-11-12';
 
 let relogio = 0;
-const tarefa = (titulo, prazo = null) => ({ titulo, prazo, criadaEm: (relogio += 1) });
+function tarefa(titulo, prazo = null) {
+  relogio += 1;
+  return { titulo, prazo, criadaEm: relogio };
+}
 
 test('grupos saem na ordem: Atrasadas, Hoje, Amanhã, datas futuras, Sem data', () => {
   const grupos = agrupar(

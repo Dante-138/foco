@@ -5,22 +5,52 @@ on:
     branches: [main]
   pull_request:
 
+# O token do workflow só lê o repositório.
 permissions:
   contents: read
 
-jobs:
-  check:
-    name: Lint, formatação e testes
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
-      - uses: actions/setup-node@v7
+jobs:
+  # A proteção da branch main exige este job verde para liberar o merge.
+  # Trocar o nome dele exige atualizar a proteção.
+  gate:
+    name: Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Actions fixadas pelo hash do commit, não por tag (que pode ser reapontada).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # o portão de commits compara com a branch de destino
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
 
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm test
+      # --ignore-scripts: nenhuma dependência roda código na instalação.
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Mensagens de commit e título do PR
+        if: github.event_name == 'pull_request'
+        env:
+          TITULO_PR: ${{ github.event.pull_request.title }}
+          BASE: origin/${{ github.base_ref }}
+        run: node tools/verificar-commits.mjs "$BASE"
+
+      - name: Lint (zero avisos)
+        run: npm run lint
+
+      - name: Formatação
+        run: npm run format:check
+
+      - name: Testes de unidade (100% de cobertura do núcleo)
+        run: npm test
+
+      - name: Testes de ponta a ponta (Chrome)
+        run: npm run test:e2e
