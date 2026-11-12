@@ -1,50 +1,15 @@
 // Aba Tarefas: listas com prazo, no estilo do Google Tasks.
 // As tarefas aparecem agrupadas por data; as sem data ficam no fim.
 
-import { estado, salvar, uid, hoje, deIso, somaDias } from './store.js';
+import { estado, salvar } from './store.js';
+import { uid } from './ids.js';
+import { hoje, somaDias } from './datas.js';
+import { agrupar, rotuloData } from './prazos.js';
 import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
 
 const ESTRELA = 'estrela'; // valor de estado.listaAtiva para a visão "com estrela"
 
 let concluidasAbertas = false;
-
-// ----------------------------------------------------------------- datas
-
-const fmtCurta = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' });
-const fmtComAno = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' });
-
-function rotuloData(iso) {
-  const data = deIso(iso);
-  return data.getFullYear() === new Date().getFullYear() ? fmtCurta.format(data) : fmtComAno.format(data);
-}
-
-// Ordem: com prazo primeiro (mais próximo no topo), depois as sem data.
-function porPrazo(a, b) {
-  if (a.prazo && b.prazo) return a.prazo.localeCompare(b.prazo) || a.criadaEm - b.criadaEm;
-  if (a.prazo) return -1;
-  if (b.prazo) return 1;
-  return a.criadaEm - b.criadaEm;
-}
-
-function agrupar(pendentes) {
-  const dia = hoje();
-  const amanha = somaDias(dia, 1);
-  const grupos = [];
-  const grupo = (chave, rotulo, atrasado = false) => {
-    let g = grupos.find((x) => x.chave === chave);
-    if (!g) grupos.push((g = { chave, rotulo, atrasado, tarefas: [] }));
-    return g;
-  };
-
-  for (const t of [...pendentes].sort(porPrazo)) {
-    if (!t.prazo) grupo('sem-data', 'Sem data').tarefas.push(t);
-    else if (t.prazo < dia) grupo('atrasadas', 'Atrasadas', true).tarefas.push(t);
-    else if (t.prazo === dia) grupo('hoje', 'Hoje').tarefas.push(t);
-    else if (t.prazo === amanha) grupo('amanha', 'Amanhã').tarefas.push(t);
-    else grupo(t.prazo, rotuloData(t.prazo)).tarefas.push(t);
-  }
-  return grupos;
-}
 
 // ---------------------------------------------------------------- ações
 
@@ -221,7 +186,8 @@ function editarLista(lista) {
 
 async function excluirLista(lista) {
   const quantas = estado.tarefas.filter((t) => t.listaId === lista.id).length;
-  const complemento = quantas === 0 ? '' : quantas === 1 ? ' e a tarefa dela' : ` e as ${quantas} tarefas dela`;
+  const complemento =
+    quantas === 0 ? '' : quantas === 1 ? ' e a tarefa dela' : ` e as ${quantas} tarefas dela`;
   if (!(await confirmar(`Excluir a lista "${lista.nome}"${complemento}?`))) return;
 
   estado.listas = estado.listas.filter((l) => l.id !== lista.id);
@@ -248,7 +214,11 @@ function menuLista(lista) {
 function linha(tarefa, { atrasada = false, mostrarLista = false } = {}) {
   const detalhes = [];
   if (atrasada || tarefa.feita) {
-    if (tarefa.prazo) detalhes.push(h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, rotuloData(tarefa.prazo)));
+    if (tarefa.prazo) {
+      detalhes.push(
+        h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, rotuloData(tarefa.prazo, hoje())),
+      );
+    }
   }
   if (mostrarLista) {
     const nomeLista = estado.listas.find((l) => l.id === tarefa.listaId)?.nome;
@@ -339,12 +309,16 @@ function render(raiz) {
     ),
   );
 
-  const blocos = agrupar(pendentes).map((g) =>
+  const blocos = agrupar(pendentes, hoje()).map((g) =>
     h(
       'section',
       { class: `cartao grupo${g.atrasado ? ' atrasado' : ''}` },
       h('h3', { class: 'grupo-titulo' }, g.rotulo),
-      h('ul', {}, g.tarefas.map((t) => linha(t, { atrasada: g.atrasado, mostrarLista: naEstrela }))),
+      h(
+        'ul',
+        {},
+        g.tarefas.map((t) => linha(t, { atrasada: g.atrasado, mostrarLista: naEstrela })),
+      ),
     ),
   );
 
@@ -378,7 +352,13 @@ function render(raiz) {
           `Concluídas (${concluidas.length})`,
           icone(concluidasAbertas ? 'cima' : 'baixo'),
         ),
-        concluidasAbertas ? h('ul', {}, concluidas.map((t) => linha(t))) : null,
+        concluidasAbertas
+          ? h(
+              'ul',
+              {},
+              concluidas.map((t) => linha(t)),
+            )
+          : null,
       ),
     );
   }
@@ -398,7 +378,12 @@ function render(raiz) {
         ? null
         : h(
             'button',
-            { type: 'button', class: 'botao-icone', 'aria-label': 'Opções da lista', onclick: () => menuLista(ativa) },
+            {
+              type: 'button',
+              class: 'botao-icone',
+              'aria-label': 'Opções da lista',
+              onclick: () => menuLista(ativa),
+            },
             icone('pontos'),
           ),
     ),

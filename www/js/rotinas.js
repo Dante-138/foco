@@ -1,58 +1,10 @@
 // Aba Rotinas: checklists do dia, com seções e horários.
 // As marcas valem para o dia corrente e zeram sozinhas no dia seguinte.
 
-import { estado, salvar, uid, marcasDeHoje } from './store.js';
+import { estado, salvar, marcasDeHoje } from './store.js';
+import { uid } from './ids.js';
+import { textoParaItens, itensParaTexto } from './rotina-texto.js';
 import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
-
-// ------------------------------------------------------- texto <-> itens
-// A rotina é editada como texto puro, igual a uma nota: uma linha por item,
-// "# Nome" abre uma seção e um horário no começo da linha (22:30) é opcional.
-
-const MARCADOR = /^(\[[ xX]?\]|[-*•☐☑✓✔])\s*/; // restos de checklist colado de outro app
-const HORARIO = /^(\d{1,2}):(\d{2})\s+(.+)$/;
-
-function linhaParaItem(linha) {
-  let texto = linha.trim().replace(MARCADOR, '');
-  if (!texto) return null;
-
-  if (texto.startsWith('#')) {
-    texto = texto.replace(/^#+\s*/, '');
-    return texto ? { tipo: 'secao', texto, hora: null } : null;
-  }
-
-  const m = texto.match(HORARIO);
-  if (m && Number(m[1]) < 24 && Number(m[2]) < 60) {
-    const resto = m[3].replace(/^[-–—]\s*/, '').trim();
-    if (resto) return { tipo: 'item', texto: resto, hora: `${m[1].padStart(2, '0')}:${m[2]}` };
-  }
-  return { tipo: 'item', texto, hora: null };
-}
-
-// Reaproveita o id de quem manteve o mesmo texto, para a edição não apagar
-// as marcas de hoje. Mudar só o horário de um item preserva a marca.
-function textoParaItens(texto, antigos) {
-  const chave = (i) => `${i.tipo}|${i.texto}`;
-  const livres = new Map();
-  for (const antigo of antigos) {
-    const fila = livres.get(chave(antigo)) ?? [];
-    fila.push(antigo.id);
-    livres.set(chave(antigo), fila);
-  }
-  return texto
-    .split(/\r?\n/)
-    .map(linhaParaItem)
-    .filter(Boolean)
-    .map((item) => ({ id: livres.get(chave(item))?.shift() ?? uid(), ...item }));
-}
-
-function itensParaTexto(itens) {
-  return itens
-    .map((i, n) => {
-      if (i.tipo === 'secao') return `${n ? '\n' : ''}# ${i.texto}`;
-      return i.hora ? `${i.hora} ${i.texto}` : i.texto;
-    })
-    .join('\n');
-}
 
 // ---------------------------------------------------------------- ações
 
@@ -245,13 +197,26 @@ function render(raiz) {
       ),
       h(
         'button',
-        { type: 'button', class: 'botao-icone', 'aria-label': 'Opções da rotina', onclick: () => menuRotina(ativa) },
+        {
+          type: 'button',
+          class: 'botao-icone',
+          'aria-label': 'Opções da rotina',
+          onclick: () => menuRotina(ativa),
+        },
         icone('pontos'),
       ),
     ),
-    h('div', { class: 'progresso' }, h('div', { class: 'progresso-barra', style: { width: `${porcento}%` } })),
+    h(
+      'div',
+      { class: 'progresso' },
+      h('div', { class: 'progresso-barra', style: { width: `${porcento}%` } }),
+    ),
     itens.length
-      ? h('ul', { class: 'cartao' }, ativa.itens.map((item) => linha(ativa, item, marcadas)))
+      ? h(
+          'ul',
+          { class: 'cartao' },
+          ativa.itens.map((item) => linha(ativa, item, marcadas)),
+        )
       : estadoVazio('Rotina vazia', 'Abra o menu e toque em Editar rotina.'),
   );
   faixa.scrollLeft = rolagemFaixa;

@@ -1,7 +1,10 @@
 // Aba Hábitos: grade no estilo do Loop.
 // Uma linha por hábito, uma coluna por dia, o dia mais recente à esquerda.
 
-import { estado, salvar, uid, hoje, deIso, somaDias } from './store.js';
+import { estado, salvar } from './store.js';
+import { uid } from './ids.js';
+import { hoje, deIso, somaDias } from './datas.js';
+import { formatar, lerNumero, metaDe, cumprido, proximaMarca, taxa } from './habito-calculo.js';
 import { h, icone, abrirFolha, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
 
 // O hábito guarda a chave da cor; o tom de cada tema vem das variáveis
@@ -22,46 +25,19 @@ const CHAVES_DE_COR = new Set(CORES.map((c) => c.chave));
 const corCss = (chave) => `var(--cor-${CHAVES_DE_COR.has(chave) ? chave : 'azul'})`;
 
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-const JANELA_ANEL = 7; // dias considerados no anel de progresso
 
-const formatar = (n) => String(n).replace('.', ',');
-
-function lerNumero(texto) {
-  const n = Number.parseFloat(String(texto).trim().replace(',', '.'));
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
-
-const metaDe = (habito) => habito.meta ?? 1;
-
-function cumprido(habito, valor) {
-  if (habito.tipo === 'numero') return typeof valor === 'number' && valor >= metaDe(habito);
-  return valor === 'feito';
-}
-
-// Fração de dias cumpridos na janela, ignorando os dias pulados.
-function taxa(habito) {
-  const registro = estado.registros[habito.id] ?? {};
-  let feitos = 0;
-  let validos = 0;
-  for (let i = 0; i < JANELA_ANEL; i += 1) {
-    const valor = registro[somaDias(hoje(), -i)];
-    if (valor === 'pulado') continue;
-    validos += 1;
-    if (cumprido(habito, valor)) feitos += 1;
-  }
-  return validos ? feitos / validos : 0;
-}
-
+// Anel de progresso: fração de dias cumpridos na última semana.
 function anel(habito) {
   const raio = 7;
   const volta = 2 * Math.PI * raio;
+  const fracao = taxa(habito, estado.registros[habito.id] ?? {}, hoje());
   const span = h('span', { class: 'anel' });
   // Só números calculados aqui entram no SVG.
   span.innerHTML =
     `<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">` +
     `<circle cx="10" cy="10" r="${raio}" fill="none" stroke="currentColor" stroke-opacity="0.22" stroke-width="3"/>` +
     `<circle cx="10" cy="10" r="${raio}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" ` +
-    `stroke-dasharray="${(taxa(habito) * volta).toFixed(2)} ${volta.toFixed(2)}" transform="rotate(-90 10 10)"/></svg>`;
+    `stroke-dasharray="${(fracao * volta).toFixed(2)} ${volta.toFixed(2)}" transform="rotate(-90 10 10)"/></svg>`;
   return span;
 }
 
@@ -75,11 +51,8 @@ function gravar(habito, dia, valor) {
   redesenhar();
 }
 
-// Sim ou não: vazio -> feito -> pulado -> vazio.
 function alternar(habito, dia) {
-  const atual = estado.registros[habito.id]?.[dia];
-  const proximo = atual === 'feito' ? 'pulado' : atual === 'pulado' ? null : 'feito';
-  gravar(habito, dia, proximo);
+  gravar(habito, dia, proximaMarca(estado.registros[habito.id]?.[dia]));
 }
 
 function rotuloDia(dia) {
@@ -117,7 +90,10 @@ function pedirValor(habito, dia) {
     corpo: h(
       'form',
       { class: 'folha-form', onsubmit: aoSalvar },
-      campo(`Quantidade${unidade ? ` em${unidade}` : ''}, meta ${formatar(metaDe(habito))}${unidade}`, entrada),
+      campo(
+        `Quantidade${unidade ? ` em${unidade}` : ''}, meta ${formatar(metaDe(habito))}${unidade}`,
+        entrada,
+      ),
       h(
         'div',
         { class: 'linha-botoes' },
@@ -320,7 +296,9 @@ function celula(habito, dia) {
         'aria-label': `${habito.nome}, ${rotuloDia(dia)}: ${estadoTexto}`,
         onclick: () => pedirValor(habito, dia),
       },
-      pulado ? icone('menos', { tam: 20 }) : [h('b', {}, formatar(numero ?? 0)), habito.unidade ? h('small', {}, habito.unidade) : null],
+      pulado
+        ? icone('menos', { tam: 20 })
+        : [h('b', {}, formatar(numero ?? 0)), habito.unidade ? h('small', {}, habito.unidade) : null],
     );
   }
 
