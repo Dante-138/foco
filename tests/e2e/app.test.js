@@ -371,6 +371,38 @@ test('voltar com texto não salvo na rotina pergunta antes de descartar', async 
   assert.deepEqual(erros, []);
 });
 
+test('fechar uma folha e abrir outra em seguida não tira o app do lugar', async (t) => {
+  // Regressão: o menu fecha e a edição abre no mesmo instante. Com o histórico
+  // desalinhado, o fechamento seguinte voltava uma página a mais e saía do app.
+  const { pagina, erros } = await abrir(t);
+  const noApp = () =>
+    pagina.evaluate(() => location.pathname === '/' && Boolean(document.getElementById('abas')));
+
+  await botao(pagina, 'Nova rotina').click();
+  await pagina.getByLabel('Nome').fill('Manhã');
+  await pagina.getByLabel('Itens').fill('Acordar');
+  await botao(pagina, 'Salvar').click();
+
+  for (let volta = 0; volta < 3; volta += 1) {
+    await botao(pagina, 'Opções da rotina').click();
+    await botao(pagina, 'Editar rotina').click(); // fecha o menu e abre a edição
+    await visivel(pagina.getByText('Editar rotina', { exact: true }));
+    await botao(pagina, 'Salvar').click();
+    await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+  }
+  await pagina.waitForTimeout(200); // dá tempo de qualquer volta indevida acontecer
+  assert.equal(await noApp(), true);
+  await visivel(pagina.getByText('0 de 1 hoje'));
+
+  // Com tudo fechado não sobra entrada de guarda: o voltar seguinte fecha uma folha nova, e só ela.
+  await botao(pagina, 'Opções da rotina').click();
+  await visivel(botao(pagina, 'Editar rotina'));
+  await pagina.goBack();
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+  assert.equal(await noApp(), true);
+  assert.deepEqual(erros, []);
+});
+
 // --------------------------------------------------------- barras do sistema
 
 test('barras do sistema: o topo e a barra de abas respeitam a área segura', async (t) => {

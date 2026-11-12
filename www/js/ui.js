@@ -104,26 +104,54 @@ export function icone(nome, { cheio = false, tam = 24 } = {}) {
 
 // --------------------------------------------------------------- folhas
 
-// Botão voltar. Cada folha aberta ocupa uma entrada no histórico do navegador:
-// assim o voltar (gesto ou botão do Android, ou o do navegador) fecha a folha
-// de cima em vez de sair do app. A conta é sempre uma entrada por folha aberta.
+// Botão voltar. Enquanto houver folha aberta, o app mantém UMA entrada de guarda
+// no histórico do navegador. O voltar (gesto ou botão do Android, ou o do
+// navegador) consome essa entrada e fecha a folha de cima em vez de sair do app.
+//
+// O histórico nunca é mexido na hora em que uma folha abre ou fecha: isso só
+// marca que é preciso conferir. A conferência roda depois, uma vez, e compara o
+// que deveria existir com o que existe. Assim "fechar uma folha e abrir outra em
+// seguida" não gera um vai e volta no histórico, e uma volta pedida pelo app
+// nunca corre junto com uma entrada nova.
 const folhasAbertas = []; // pilha: a última é a folha de cima
-let voltasPorCodigo = 0; // history.back() chamados ao fechar pelo app, que o ouvinte deve ignorar
+let guardaNoHistorico = false; // a entrada de guarda existe
+let voltaEmAndamento = false; // o app pediu history.back() e o popstate ainda não chegou
+let acertoAgendado = false;
+
+function acertarHistorico() {
+  acertoAgendado = false;
+  if (voltaEmAndamento) return; // o popstate dessa volta chama de novo
+  const precisaDeGuarda = folhasAbertas.length > 0;
+  if (precisaDeGuarda && !guardaNoHistorico) {
+    window.history.pushState({ folha: true }, '');
+    guardaNoHistorico = true;
+  } else if (!precisaDeGuarda && guardaNoHistorico) {
+    guardaNoHistorico = false;
+    voltaEmAndamento = true;
+    window.history.back();
+  }
+}
+
+function agendarAcerto() {
+  if (acertoAgendado) return;
+  acertoAgendado = true;
+  setTimeout(acertarHistorico, 0);
+}
 
 window.addEventListener('popstate', () => {
-  if (voltasPorCodigo > 0) {
-    voltasPorCodigo -= 1;
+  if (voltaEmAndamento) {
+    // Volta pedida pelo app para retirar a guarda: nada a fechar.
+    voltaEmAndamento = false;
+    acertarHistorico();
     return;
   }
+  // Voltar da pessoa: a guarda foi consumida. Fecha a folha de cima, ou deixa
+  // que ela pergunte antes. Se sobrar folha aberta, o acerto repõe a guarda.
+  guardaNoHistorico = false;
   const topo = folhasAbertas.at(-1);
-  if (!topo) return;
-  if (topo.aoTentarFechar) {
-    // A folha vai perguntar antes de fechar: devolve a entrada que o voltar consumiu.
-    window.history.pushState({ folha: true }, '');
-    topo.aoTentarFechar();
-  } else {
-    topo.fecharPeloVoltar();
-  }
+  if (topo?.aoTentarFechar) topo.aoTentarFechar();
+  else topo?.fechar();
+  agendarAcerto();
 });
 
 // Folha que sobe do rodapé (bottom sheet). Devolve a função que a fecha.
@@ -146,33 +174,26 @@ export function abrirFolha({ titulo, corpo, fecharNoFundo = true, aoFechar, aoTe
   // A limpeza roda na hora em que fechar() é chamado. O evento "close" do
   // navegador só é entregue no próximo quadro desenhado (e não chega com a
   // página em segundo plano), então fica apenas como rede de segurança.
-  const registro = { aoTentarFechar, fecharPeloVoltar: null };
+  const registro = { aoTentarFechar, fechar: null };
   let finalizado = false;
-  // peloVoltar: o histórico já andou sozinho; nos outros casos quem anda é o app.
-  const finalizar = (peloVoltar) => {
+  const finalizar = () => {
     if (finalizado) return;
     finalizado = true;
     const posicao = folhasAbertas.indexOf(registro);
     if (posicao >= 0) folhasAbertas.splice(posicao, 1);
-    if (!peloVoltar) {
-      voltasPorCodigo += 1;
-      window.history.back();
-    }
+    agendarAcerto();
     dialogo.remove();
     aoFechar?.();
   };
   const fechar = () => {
     if (dialogo.open) dialogo.close();
-    finalizar(false);
+    finalizar();
   };
-  registro.fecharPeloVoltar = () => {
-    if (dialogo.open) dialogo.close();
-    finalizar(true);
-  };
-  dialogo.addEventListener('close', () => finalizar(false));
+  registro.fechar = fechar;
+  dialogo.addEventListener('close', finalizar);
 
   folhasAbertas.push(registro);
-  window.history.pushState({ folha: true }, '');
+  agendarAcerto();
 
   // Tecla Esc: fechamos nós mesmos, na hora.
   dialogo.addEventListener('cancel', (e) => {
