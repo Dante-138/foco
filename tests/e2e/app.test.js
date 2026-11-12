@@ -319,6 +319,36 @@ test('duas abas: o que uma grava aparece na outra, sem sobrescrever', async (t) 
   assert.deepEqual(erros, []);
 });
 
+// --------------------------------------------------------- barras do sistema
+
+test('barras do sistema: o topo e a barra de abas respeitam a área segura', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  const medir = () =>
+    pagina.evaluate(() => ({
+      alturaDoTopo: document.querySelector('.topo').getBoundingClientRect().height,
+      inicioDoTitulo: document.getElementById('titulo').getBoundingClientRect().top,
+      alturaDasAbas: document.getElementById('abas').getBoundingClientRect().height,
+    }));
+
+  // No navegador de mesa não há barra do sistema sobre a página.
+  const antes = await medir();
+
+  // No Android a página vai de borda a borda e o Capacitor informa o espaço das
+  // barras nestas variáveis. Simula 40 px de barra de status e 24 px de navegação.
+  await pagina.evaluate(() => {
+    document.documentElement.style.setProperty('--safe-area-inset-top', '40px');
+    document.documentElement.style.setProperty('--safe-area-inset-bottom', '24px');
+  });
+  const depois = await medir();
+
+  assert.equal(depois.alturaDoTopo, antes.alturaDoTopo + 40);
+  assert.ok(depois.inicioDoTitulo >= 40, `o título começa em ${depois.inicioDoTitulo}, sob a barra`);
+  assert.equal(depois.alturaDasAbas, antes.alturaDasAbas + 24);
+  assert.deepEqual(erros, []);
+});
+
 // ----------------------------------------------------------------- segurança
 
 test('política de segurança: HTML em texto e conexão de rede são bloqueados', async (t) => {

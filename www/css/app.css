@@ -41,6 +41,12 @@
   --topo-h: 56px;
   --abas-h: 64px;
   --largura-max: 720px;
+
+  /* Espaço ocupado pelas barras do sistema (status em cima, navegação embaixo).
+     No Android a página vai de borda a borda: o Capacitor informa os valores em
+     --safe-area-inset-*; onde ele não existe, vale o env() do navegador. */
+  --topo-seguro: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --base-segura: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
 }
 
 /* Tema claro: cartões brancos sobre cinza bem claro. */
@@ -164,8 +170,8 @@ ul {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--topo-h);
-  padding: 0 4px 0 16px;
+  height: calc(var(--topo-h) + var(--topo-seguro));
+  padding: var(--topo-seguro) 4px 0 16px;
 }
 
 .topo h1 {
@@ -185,8 +191,8 @@ ul {
   flex: none;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  height: calc(var(--abas-h) + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
+  height: calc(var(--abas-h) + var(--base-segura));
+  padding-bottom: var(--base-segura);
   background: var(--barra);
   border-top: 1px solid var(--linha);
 }
@@ -222,7 +228,7 @@ ul {
 .fab {
   position: fixed;
   right: max(16px, calc((100vw - var(--largura-max)) / 2 + 16px));
-  bottom: calc(var(--abas-h) + 16px + env(safe-area-inset-bottom));
+  bottom: calc(var(--abas-h) + 16px + var(--base-segura));
   display: grid;
   place-items: center;
   width: 56px;
@@ -667,7 +673,7 @@ dialog.folha[open] {
 .folha-dentro {
   display: grid;
   gap: 14px;
-  padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
+  padding: 10px 16px calc(16px + var(--base-segura));
 }
 
 .folha-pega {
