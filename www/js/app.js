@@ -5,6 +5,8 @@ import { h, icone, avisar } from './ui.js';
 import { rotinas } from './rotinas.js';
 import { habitos } from './habitos.js';
 import { tarefas } from './tarefas.js';
+import { aplicarTema } from './tema.js';
+import { abrirAjustes } from './ajustes.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar().
 const ABAS = [rotinas, habitos, tarefas];
@@ -50,6 +52,12 @@ function desenhar({ manterRolagem = false } = {}) {
 
 fab.append(icone('mais', { tam: 28 }));
 fab.addEventListener('click', () => abaAtual().aoAdicionar());
+
+const botaoAjustes = document.getElementById('ajustes');
+botaoAjustes.append(icone('ajustes'));
+botaoAjustes.addEventListener('click', abrirAjustes);
+
+aplicarTema(); // tema-inicial.js já definiu o tema; aqui acerta a cor da barra do sistema
 
 document.addEventListener('foco:redesenhar', () => desenhar({ manterRolagem: true }));
 

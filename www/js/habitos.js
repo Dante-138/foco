@@ -4,17 +4,22 @@
 import { estado, salvar, uid, hoje, deIso, somaDias } from './store.js';
 import { h, icone, abrirFolha, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
 
+// O hábito guarda a chave da cor; o tom de cada tema vem das variáveis
+// --cor-<chave> em css/app.css. "Neutro" é branco no tema escuro e preto no claro.
 const CORES = [
-  { nome: 'Amarelo', valor: '#ffd95a' },
-  { nome: 'Laranja', valor: '#ff9f5a' },
-  { nome: 'Vermelho', valor: '#ff6b6b' },
-  { nome: 'Rosa', valor: '#f472a6' },
-  { nome: 'Lilás', valor: '#b09cf2' },
-  { nome: 'Azul', valor: '#5aaaf5' },
-  { nome: 'Ciano', valor: '#4fd1c5' },
-  { nome: 'Verde', valor: '#6fd08c' },
-  { nome: 'Branco', valor: '#f2f2f2' },
+  { chave: 'amarelo', nome: 'Amarelo' },
+  { chave: 'laranja', nome: 'Laranja' },
+  { chave: 'vermelho', nome: 'Vermelho' },
+  { chave: 'rosa', nome: 'Rosa' },
+  { chave: 'lilas', nome: 'Lilás' },
+  { chave: 'azul', nome: 'Azul' },
+  { chave: 'ciano', nome: 'Ciano' },
+  { chave: 'verde', nome: 'Verde' },
+  { chave: 'neutro', nome: 'Neutro' },
 ];
+const CHAVES_DE_COR = new Set(CORES.map((c) => c.chave));
+
+const corCss = (chave) => `var(--cor-${CHAVES_DE_COR.has(chave) ? chave : 'azul'})`;
 
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const JANELA_ANEL = 7; // dias considerados no anel de progresso
@@ -149,7 +154,7 @@ function mover(habito, passo) {
 }
 
 function editarHabito(habito) {
-  let cor = habito?.cor ?? CORES[0].valor;
+  let cor = habito?.cor ?? CORES[0].chave;
   let tipo = habito?.tipo ?? 'simnao';
 
   const nome = h('input', {
@@ -181,13 +186,13 @@ function editarHabito(habito) {
       ...CORES.map((c) =>
         h('button', {
           type: 'button',
-          class: `amostra${c.valor === cor ? ' ativa' : ''}`,
-          style: { '--cor': c.valor },
+          class: `amostra${c.chave === cor ? ' ativa' : ''}`,
+          style: { '--cor': corCss(c.chave) },
           role: 'radio',
-          'aria-checked': String(c.valor === cor),
+          'aria-checked': String(c.chave === cor),
           'aria-label': c.nome,
           onclick: () => {
-            cor = c.valor;
+            cor = c.chave;
             desenharCores();
           },
         }),
@@ -366,7 +371,7 @@ function render(raiz) {
       estado.habitos.map((habito) =>
         h(
           'div',
-          { class: 'habito', style: { '--cor': habito.cor } },
+          { class: 'habito', style: { '--cor': corCss(habito.cor) } },
           h(
             'button',
             {

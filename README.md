@@ -11,6 +11,7 @@ rotinas do dia, hábitos e tarefas com prazo.
 - **Hábitos**: grade com um hábito por linha e um dia por coluna (feito, não feito, pulado),
   além de hábitos numéricos com meta diária.
 - **Tarefas**: listas com prazo, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data.
+- **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
 
 Os dados ficam só no aparelho (`localStorage`). Nada é enviado para servidor.
 
@@ -41,6 +42,9 @@ www/                 app em HTML, CSS e JavaScript puro (módulos ES)
   js/app.js          navegação entre as abas
   js/store.js        estado e persistência
   js/ui.js           elementos, ícones e folhas
+  js/tema.js         tema claro, escuro ou do sistema
+  js/tema-inicial.js aplica o tema antes do primeiro desenho
+  js/ajustes.js      folha de ajustes
   js/rotinas.js
   js/habitos.js
   js/tarefas.js
@@ -49,6 +53,5 @@ tools/serve.mjs      servidor estático de desenvolvimento
 
 ## Próximos passos
 
-- Tema claro
 - Casca Android (APK) com lembrete de prazo
 - Backup e restauração dos dados

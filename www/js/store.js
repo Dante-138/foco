@@ -34,16 +34,41 @@ export function somaDias(iso, n) {
 //
 // rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora }] }]
 // marcasRotina: { data: 'AAAA-MM-DD', porRotina: { rotinaId: [itemId] } }  (só o dia corrente)
-// habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade, meta }]
+// habitos:      [{ id, nome, cor (chave da paleta), tipo: 'simnao' | 'numero', unidade, meta }]
 // registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número } }
 // listas:       [{ id, nome }]
 // tarefas:      [{ id, listaId, titulo, notas, prazo: 'AAAA-MM-DD' | null,
 //                  estrela, feita, criadaEm, feitaEm }]
 
+const VERSAO = 2;
+
+// A v1 guardava a cor do hábito como hexadecimal. A v2 guarda a chave da
+// paleta, para a cor acompanhar o tema claro ou escuro.
+const CORES_V1 = {
+  '#ffd95a': 'amarelo',
+  '#ff9f5a': 'laranja',
+  '#ff6b6b': 'vermelho',
+  '#f472a6': 'rosa',
+  '#b09cf2': 'lilas',
+  '#5aaaf5': 'azul',
+  '#4fd1c5': 'ciano',
+  '#6fd08c': 'verde',
+  '#f2f2f2': 'neutro',
+};
+
+// Atualiza dados salvos por versões anteriores. Cada bloco sobe uma versão.
+function migrar(dados) {
+  if (dados.versao < 2) {
+    for (const habito of dados.habitos) habito.cor = CORES_V1[habito.cor] ?? 'azul';
+    dados.versao = 2;
+  }
+  return dados;
+}
+
 function estadoInicial() {
   const lista = { id: uid(), nome: 'Minhas tarefas' };
   return {
-    versao: 1,
+    versao: VERSAO,
     aba: 'rotinas',
     rotinas: [],
     rotinaAtiva: null,
@@ -60,7 +85,7 @@ function carregar() {
   let bruto = null;
   try {
     bruto = localStorage.getItem(CHAVE);
-    if (bruto) return { ...estadoInicial(), ...JSON.parse(bruto) };
+    if (bruto) return migrar({ ...estadoInicial(), ...JSON.parse(bruto) });
   } catch (erro) {
     console.error('Falha ao ler os dados salvos', erro);
     // Guarda o conteúdo ilegível antes que o próximo salvar() o sobrescreva.

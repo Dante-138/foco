@@ -42,6 +42,8 @@ const TRACOS = {
   estrela: '<path d="M12 3.8l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/>',
   cima: '<path d="M6 14.5l6-6 6 6"/>',
   baixo: '<path d="M6 9.5l6 6 6-6"/>',
+  ajustes:
+    '<path d="M4 7h8M18 7h2M4 17h2M12 17h8"/><circle cx="15" cy="7" r="2.5"/><circle cx="9" cy="17" r="2.5"/>',
   rotinas: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   habitos: '<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.3l2.5 2.5 4.9-5.3"/>',
   tarefas:
