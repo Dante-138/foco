@@ -1,0 +1,15 @@
+# Modelo do arquivo de propriedades da assinatura do APK.
+#
+# Copie para a pasta das chaves, FORA do repositório, com o nome assinatura.properties
+# e troque os dois campos de senha pela senha da sua keystore:
+#
+#   C:\dev\foco-chaves\assinatura.properties
+#
+# Nunca coloque a senha neste arquivo de modelo nem em qualquer arquivo do repositório.
+# Se a senha tiver barra invertida, escreva duas (\\). O caminho abaixo é o de dentro do
+# container de build, onde a pasta das chaves aparece como /chaves.
+
+storeFile=/chaves/foco.jks
+storePassword=TROQUE_PELA_SENHA
+keyAlias=foco
+keyPassword=TROQUE_PELA_SENHA

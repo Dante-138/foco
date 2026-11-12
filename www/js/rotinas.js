@@ -126,7 +126,9 @@ function menuRotina(rotina) {
 
 // --------------------------------------------------------------- desenho
 
-function linha(rotina, item, marcadas) {
+// comHoras: a rotina tem algum item com horário. Nesse caso todo item reserva a
+// coluna do horário, para os textos ficarem alinhados uns com os outros.
+function linha(rotina, item, marcadas, comHoras) {
   if (item.tipo === 'secao') return h('li', { class: 'rotina-secao' }, item.texto);
 
   const feito = marcadas.has(item.id);
@@ -143,7 +145,7 @@ function linha(rotina, item, marcadas) {
         onclick: () => alternarItem(rotina, item),
       },
       h('span', { class: 'caixa' }, icone('check', { tam: 16 })),
-      item.hora ? h('span', { class: 'hora' }, item.hora) : null,
+      comHoras ? h('span', { class: 'hora' }, item.hora ?? '') : null,
       h('span', { class: 'rotina-texto' }, item.texto),
     ),
   );
@@ -164,6 +166,7 @@ function render(raiz) {
   const itens = ativa.itens.filter((i) => i.tipo === 'item');
   const feitos = itens.filter((i) => marcadas.has(i.id)).length;
   const porcento = itens.length ? Math.round((feitos / itens.length) * 100) : 0;
+  const comHoras = itens.some((i) => i.hora);
 
   const faixa = h(
     'div',
@@ -216,7 +219,7 @@ function render(raiz) {
       ? h(
           'ul',
           { class: 'cartao' },
-          ativa.itens.map((item) => linha(ativa, item, marcadas)),
+          ativa.itens.map((item) => linha(ativa, item, marcadas, comHoras)),
         )
       : estadoVazio('Rotina vazia', 'Abra o menu e toque em Editar rotina.'),
   );

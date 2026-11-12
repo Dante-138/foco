@@ -44,6 +44,29 @@ npm run commits     # confere as mensagens de commit do branch contra a main
 npm run format      # formata o código com o Prettier
 ```
 
+## APK Android
+
+O app é empacotado com o Capacitor (pasta `android/`). O APK é compilado dentro do Docker:
+não é preciso instalar Java nem Android Studio.
+
+A assinatura usa uma chave fixa, criada uma vez e guardada fora do repositório, em uma pasta
+com dois arquivos: `foco.jks` (a keystore) e `assinatura.properties` (modelo em
+`docker/android/assinatura.properties.exemplo`). Um APK assinado com outra chave só instala
+depois de desinstalar o app, e isso apaga os dados. Por isso a chave nunca muda e precisa de
+cópia de segurança.
+
+```bash
+pwsh tools/apk.ps1 -AceitoLicencaAndroid
+```
+
+- `-AceitoLicencaAndroid` declara o aceite da
+  [licença do Android SDK](https://developer.android.com/studio/terms), exigido para baixá-lo.
+- O APK sai em `saida/foco.apk`. Para instalar com o celular ligado por USB:
+  `adb install -r saida/foco.apk`.
+- No fim o script apaga do Docker tudo o que criou (imagem, volume e construtor de build) e
+  nada além disso. Para vários builds seguidos, use `-Manter` e termine com `-Limpar`.
+- `-Simular` mostra os comandos sem executar.
+
 ## Portão de qualidade
 
 Nada entra na `main` sem pull request, e o merge só é liberado com o job `Gate` do CI verde.

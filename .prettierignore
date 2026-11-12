@@ -1,4 +1,5 @@
 node_modules/
 referencias/
 dist/
+android/
 package-lock.json

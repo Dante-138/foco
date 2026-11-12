@@ -225,7 +225,8 @@ function linha(tarefa, { atrasada = false, mostrarLista = false } = {}) {
     const nomeLista = estado.listas.find((l) => l.id === tarefa.listaId)?.nome;
     if (nomeLista) detalhes.push(h('span', { class: 'tarefa-sub' }, nomeLista));
   }
-  if (tarefa.notas) detalhes.push(h('span', { class: 'tarefa-sub' }, tarefa.notas.split('\n')[0]));
+  // Na lista, a nota aparece resumida em até duas linhas; o texto inteiro fica na edição.
+  if (tarefa.notas) detalhes.push(h('span', { class: 'tarefa-sub nota' }, tarefa.notas.split('\n')[0]));
 
   return h(
     'li',

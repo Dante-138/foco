@@ -27,6 +27,10 @@ export function aplicarTema() {
   // A barra de status do sistema acompanha a cor de fundo do tema.
   const fundo = getComputedStyle(document.documentElement).getPropertyValue('--fundo').trim();
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', fundo);
+
+  // No app Android, os ícones das barras do sistema acompanham o tema: claros no
+  // tema escuro, escuros no tema claro. No navegador não existe a ponte do Capacitor.
+  window.Capacitor?.Plugins?.SystemBars?.setStyle?.({ style: claro ? 'LIGHT' : 'DARK' })?.catch?.(() => {});
 }
 
 export function definirTema(valor) {

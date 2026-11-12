@@ -54,3 +54,35 @@ jobs:
 
       - name: Testes de ponta a ponta (Chrome)
         run: npm run test:e2e
+
+  # Compila o projeto Android para garantir que a casca continua montando.
+  # Usa a chave de depuração do runner: este APK não é publicado. O APK assinado
+  # com a chave fixa sai do build local (tools/apk.ps1).
+  android:
+    name: Android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Copiar o app web para o projeto Android
+        run: npx cap sync android
+
+      - name: Compilar o APK de depuração
+        working-directory: android
+        run: sh ./gradlew --no-daemon --console=plain assembleDebug

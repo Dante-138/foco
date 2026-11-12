@@ -73,6 +73,12 @@ const botao = (pagina, nome) => pagina.getByRole('button', { name: nome, exact: 
 const tema = (pagina) => pagina.evaluate(() => document.documentElement.dataset.tema);
 const lerSalvo = (pagina, chave) => pagina.evaluate((k) => localStorage.getItem(k), chave);
 
+// Volta uma entrada do histórico, depois de conferir que a guarda da folha aberta existe.
+async function voltar(pagina) {
+  await pagina.waitForFunction(() => window.history.state?.folha === true, null, ESPERA);
+  await pagina.goBack();
+}
+
 async function esperarTema(pagina, esperado) {
   await pagina.waitForFunction((valor) => document.documentElement.dataset.tema === valor, esperado, ESPERA);
 }
@@ -316,6 +322,120 @@ test('duas abas: o que uma grava aparece na outra, sem sobrescrever', async (t) 
     salvo.tarefas.map((x) => x.titulo),
     ['Tarefa da aba B'],
   );
+  assert.deepEqual(erros, []);
+});
+
+// --------------------------------------------------------------- botão voltar
+
+test('voltar fecha a folha aberta em vez de sair do app', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const folhas = () => pagina.locator('dialog[open]').count();
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await visivel(pagina.getByText('Novo hábito', { exact: true }));
+  await voltar(pagina);
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+
+  // O app continua aberto, na mesma aba, e a folha abre de novo normalmente.
+  await visivel(pagina.getByText('Nenhum hábito ainda'));
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+  await visivel(botao(pagina, 'Leitura, hoje: não feito'));
+  assert.equal(await folhas(), 0);
+  assert.deepEqual(erros, []);
+});
+
+test('voltar com texto não salvo na rotina pergunta antes de descartar', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const folhas = () => pagina.locator('dialog[open]').count();
+
+  await botao(pagina, 'Nova rotina').click();
+  await pagina.getByLabel('Itens').fill('texto que não foi salvo');
+
+  // Primeiro voltar: a edição continua aberta e aparece a pergunta.
+  await voltar(pagina);
+  await visivel(pagina.getByText('Descartar as alterações?'));
+  assert.equal(await folhas(), 2);
+
+  // Segundo voltar: fecha só a pergunta; o texto continua lá.
+  await voltar(pagina);
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog[open]').length === 1, null, ESPERA);
+  assert.equal(await pagina.getByLabel('Itens').inputValue(), 'texto que não foi salvo');
+
+  // Terceiro voltar pergunta de novo; desta vez descarta.
+  await voltar(pagina);
+  await botao(pagina, 'Descartar').click();
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  // A conta do histórico fechou: um voltar a mais não reabre nem quebra nada.
+  await botao(pagina, 'Nova rotina').click();
+  await voltar(pagina);
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+  assert.deepEqual(erros, []);
+});
+
+test('fechar uma folha e abrir outra em seguida não tira o app do lugar', async (t) => {
+  // Regressão: o menu fecha e a edição abre no mesmo instante. Com o histórico
+  // desalinhado, o fechamento seguinte voltava uma página a mais e saía do app.
+  const { pagina, erros } = await abrir(t);
+  const noApp = () =>
+    pagina.evaluate(() => location.pathname === '/' && Boolean(document.getElementById('abas')));
+
+  await botao(pagina, 'Nova rotina').click();
+  await pagina.getByLabel('Nome').fill('Manhã');
+  await pagina.getByLabel('Itens').fill('Acordar');
+  await botao(pagina, 'Salvar').click();
+
+  for (let volta = 0; volta < 3; volta += 1) {
+    await botao(pagina, 'Opções da rotina').click();
+    await botao(pagina, 'Editar rotina').click(); // fecha o menu e abre a edição
+    await visivel(pagina.getByText('Editar rotina', { exact: true }));
+    await botao(pagina, 'Salvar').click();
+    await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+  }
+  await pagina.waitForTimeout(200); // dá tempo de qualquer volta indevida acontecer
+  assert.equal(await noApp(), true);
+  await visivel(pagina.getByText('0 de 1 hoje'));
+
+  // Com tudo fechado não sobra entrada de guarda: o voltar seguinte fecha uma folha nova, e só ela.
+  await botao(pagina, 'Opções da rotina').click();
+  await visivel(botao(pagina, 'Editar rotina'));
+  await voltar(pagina);
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+  assert.equal(await noApp(), true);
+  assert.deepEqual(erros, []);
+});
+
+// --------------------------------------------------------- barras do sistema
+
+test('barras do sistema: o topo e a barra de abas respeitam a área segura', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  const medir = () =>
+    pagina.evaluate(() => ({
+      alturaDoTopo: document.querySelector('.topo').getBoundingClientRect().height,
+      inicioDoTitulo: document.getElementById('titulo').getBoundingClientRect().top,
+      alturaDasAbas: document.getElementById('abas').getBoundingClientRect().height,
+    }));
+
+  // No navegador de mesa não há barra do sistema sobre a página.
+  const antes = await medir();
+
+  // No Android a página vai de borda a borda e o Capacitor informa o espaço das
+  // barras nestas variáveis. Simula 40 px de barra de status e 24 px de navegação.
+  await pagina.evaluate(() => {
+    document.documentElement.style.setProperty('--safe-area-inset-top', '40px');
+    document.documentElement.style.setProperty('--safe-area-inset-bottom', '24px');
+  });
+  const depois = await medir();
+
+  assert.equal(depois.alturaDoTopo, antes.alturaDoTopo + 40);
+  assert.ok(depois.inicioDoTitulo >= 40, `o título começa em ${depois.inicioDoTitulo}, sob a barra`);
+  assert.equal(depois.alturaDasAbas, antes.alturaDasAbas + 24);
   assert.deepEqual(erros, []);
 });
 

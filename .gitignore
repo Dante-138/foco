@@ -2,3 +2,14 @@
 referencias/
 
 node_modules/
+
+# Assinatura do APK: a chave e a senha ficam fora do repositório, sempre.
+# Estas linhas são só uma barreira a mais, caso alguém copie os arquivos para cá.
+*.jks
+*.keystore
+*.p12
+assinatura.properties
+keystore.properties
+
+# APK gerado localmente
+saida/
