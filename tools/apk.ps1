@@ -24,8 +24,17 @@
 .PARAMETER Chaves
   Pasta, fora do repositório, com foco.jks e assinatura.properties.
 
+.PARAMETER Tipo
+  "release" (padrão) gera saida/foco.apk. "debug" gera saida/foco-debug.apk: o mesmo app,
+  assinado com a mesma chave, mas inspecionável pelo cabo USB (para os testes no aparelho).
+  Um instala por cima do outro sem apagar os dados.
+
 .PARAMETER Manter
   Não apaga nada no fim. Útil para vários builds seguidos; termine com -Limpar.
+  Com a imagem já construída, o build seguinte reaproveita a imagem e o cache do Gradle.
+
+.PARAMETER Reconstruir
+  Constrói a imagem de novo mesmo que ela já exista (depois de mudar o Dockerfile).
 
 .PARAMETER Limpar
   Só apaga o que builds anteriores deixaram. Não constrói nada.
@@ -39,8 +48,10 @@
 [CmdletBinding()]
 param(
     [switch]$AceitoLicencaAndroid,
+    [ValidateSet('release', 'debug')][string]$Tipo = 'release',
     [string]$Chaves = 'C:\dev\foco-chaves',
     [switch]$Manter,
+    [switch]$Reconstruir,
     [switch]$Limpar,
     [switch]$Simular
 )
@@ -142,23 +153,29 @@ try {
         if (-not $Simular) { Set-Content -Path $Estado -Value $anotacao -Encoding utf8 }
     }
 
-    Etapa 'Construindo a imagem de build (baixa o JDK e o Android SDK)'
-    # Construtor próprio: o cache de build fica isolado e some junto com ele.
-    if (-not (ExisteConstrutor $Construtor)) {
-        Rodar docker @('buildx', 'create', '--name', $Construtor, '--driver', 'docker-container')
+    if ((ExisteImagem $Imagem) -and -not $Reconstruir) {
+        Etapa 'Imagem de build já existe: reaproveitando (use -Reconstruir para refazer)'
     }
-    Rodar docker @(
-        'buildx', 'build', '--builder', $Construtor, '--load',
-        '--build-arg', 'ACEITO_LICENCA_ANDROID=sim',
-        '--tag', $Imagem,
-        (Join-Path $Raiz 'docker\android')
-    )
+    else {
+        Etapa 'Construindo a imagem de build (baixa o JDK e o Android SDK)'
+        # Construtor próprio: o cache de build fica isolado e some junto com ele.
+        if (-not (ExisteConstrutor $Construtor)) {
+            Rodar docker @('buildx', 'create', '--name', $Construtor, '--driver', 'docker-container')
+        }
+        Rodar docker @(
+            'buildx', 'build', '--builder', $Construtor, '--load',
+            '--build-arg', 'ACEITO_LICENCA_ANDROID=sim',
+            '--tag', $Imagem,
+            (Join-Path $Raiz 'docker\android')
+        )
+    }
 
-    Etapa 'Compilando o APK no container'
+    Etapa "Compilando o APK ($Tipo) no container"
     if (-not (ExisteVolume $Volume)) { Rodar docker @('volume', 'create', $Volume) }
     if (ExisteContainer $Container) { Rodar docker @('rm', '--force', $Container) }
     Rodar docker @(
         'run', '--rm', '--name', $Container,
+        '--env', "TIPO=$Tipo",
         '--volume', "${Raiz}:/fonte:ro",
         '--volume', "${Chaves}:/chaves:ro",
         '--volume', "${Saida}:/saida",
@@ -166,7 +183,7 @@ try {
         $Imagem, 'bash', '/fonte/tools/apk-no-container.sh'
     )
 
-    $apk = Join-Path $Saida 'foco.apk'
+    $apk = Join-Path $Saida ($Tipo -eq 'debug' ? 'foco-debug.apk' : 'foco.apk')
     if (-not $Simular) {
         $arquivo = Get-Item $apk
         Etapa 'APK pronto'

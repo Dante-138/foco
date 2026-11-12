@@ -6,11 +6,21 @@
 #   /chaves   a keystore e o assinatura.properties, só leitura
 #   /saida    onde o APK pronto é deixado
 #   /root/.gradle  cache do Gradle (volume foco-gradle)
+#
+# Variável TIPO: "release" (padrão) ou "debug". O de depuração é o mesmo app,
+# assinado com a mesma chave, mas inspecionável pelo cabo USB.
 
 set -euo pipefail
 
+TIPO="${TIPO:-release}"
+case "$TIPO" in
+  release) TAREFA=assembleRelease; DESTINO=/saida/foco.apk ;;
+  debug)   TAREFA=assembleDebug;   DESTINO=/saida/foco-debug.apk ;;
+  *) echo "TIPO invalido: $TIPO (use release ou debug)" >&2; exit 1 ;;
+esac
+
 ASSINATURA=/chaves/assinatura.properties
-APK=app/build/outputs/apk/release/app-release.apk
+APK="app/build/outputs/apk/$TIPO/app-$TIPO.apk"
 
 if [ ! -f "$ASSINATURA" ]; then
   echo "Falta $ASSINATURA (veja docker/android/assinatura.properties.exemplo)." >&2
@@ -32,12 +42,12 @@ tar -C /fonte \
 
 cd /obra/android
 
-echo "== Compilando o APK de release (a primeira vez baixa o Gradle e as bibliotecas)"
+echo "== Compilando o APK ($TIPO). A primeira vez baixa o Gradle e as bibliotecas"
 sh ./gradlew --no-daemon --console=plain -Dorg.gradle.workers.max=2 \
-  assembleRelease "-Pfoco.assinatura=$ASSINATURA"
+  "$TAREFA" "-Pfoco.assinatura=$ASSINATURA"
 
 echo "== Conferindo a assinatura"
 "$BUILD_TOOLS_DIR/apksigner" verify --print-certs "$APK"
 
-cp "$APK" /saida/foco.apk
-echo "== APK pronto em /saida/foco.apk"
+cp "$APK" "$DESTINO"
+echo "== APK pronto em $DESTINO"

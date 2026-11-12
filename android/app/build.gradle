@@ -48,6 +48,13 @@ android {
         }
     }
     buildTypes {
+        // O build de depuração usa a mesma chave quando ela é informada. Assim ele
+        // instala por cima do app de release (e vice-versa) sem apagar os dados.
+        debug {
+            if (arquivoDeAssinatura) {
+                signingConfig signingConfigs.release
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
