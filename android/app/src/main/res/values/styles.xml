@@ -9,14 +9,18 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
+    <!-- Fundo preto na janela: o app abre no tema escuro, sem clarão branco antes de a página desenhar. -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
     </style>
 
-
+    <!-- Tela de abertura: fundo preto com o ícone do app, em vez da imagem padrão do Capacitor. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_foco_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
