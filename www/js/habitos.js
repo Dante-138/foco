@@ -2,43 +2,38 @@
 // Uma linha por hábito, uma coluna por dia, o dia mais recente à esquerda.
 
 import { estado, salvar } from './store.js';
-import { uid } from './ids.js';
-import { hoje, deIso, somaDias } from './datas.js';
-import { formatar, lerNumero, metaDe, cumprido, proximaMarca, taxa } from './habito-calculo.js';
-import { h, icone, abrirFolha, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
+import { uid } from './nucleo/ids.js';
+import { hoje, deIso, somaDias } from './nucleo/datas.js';
+import { LIMITES } from './nucleo/esquema.js';
+import { CORES, COR_PADRAO, corValida } from './nucleo/paleta.js';
+import { formatar, lerNumero, metaDe, cumprido, proximaMarca, taxa } from './nucleo/habito-calculo.js';
+import { h, svg, icone, abrirFolha, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
 
-// O hábito guarda a chave da cor; o tom de cada tema vem das variáveis
-// --cor-<chave> em css/app.css. "Neutro" é branco no tema escuro e preto no claro.
-const CORES = [
-  { chave: 'amarelo', nome: 'Amarelo' },
-  { chave: 'laranja', nome: 'Laranja' },
-  { chave: 'vermelho', nome: 'Vermelho' },
-  { chave: 'rosa', nome: 'Rosa' },
-  { chave: 'lilas', nome: 'Lilás' },
-  { chave: 'azul', nome: 'Azul' },
-  { chave: 'ciano', nome: 'Ciano' },
-  { chave: 'verde', nome: 'Verde' },
-  { chave: 'neutro', nome: 'Neutro' },
-];
-const CHAVES_DE_COR = new Set(CORES.map((c) => c.chave));
-
-const corCss = (chave) => `var(--cor-${CHAVES_DE_COR.has(chave) ? chave : 'azul'})`;
+const corCss = (chave) => `var(--cor-${corValida(chave) ? chave : COR_PADRAO})`;
 
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
 // Anel de progresso: fração de dias cumpridos na última semana.
-function anel(habito) {
+function anel(habito, diaHoje) {
   const raio = 7;
   const volta = 2 * Math.PI * raio;
-  const fracao = taxa(habito, estado.registros[habito.id] ?? {}, hoje());
-  const span = h('span', { class: 'anel' });
-  // Só números calculados aqui entram no SVG.
-  span.innerHTML =
-    `<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">` +
-    `<circle cx="10" cy="10" r="${raio}" fill="none" stroke="currentColor" stroke-opacity="0.22" stroke-width="3"/>` +
-    `<circle cx="10" cy="10" r="${raio}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" ` +
-    `stroke-dasharray="${(fracao * volta).toFixed(2)} ${volta.toFixed(2)}" transform="rotate(-90 10 10)"/></svg>`;
-  return span;
+  const fracao = taxa(habito, estado.registros[habito.id] ?? {}, diaHoje);
+  const circulo = { cx: 10, cy: 10, r: raio, fill: 'none', stroke: 'currentColor', 'stroke-width': 3 };
+  return h(
+    'span',
+    { class: 'anel' },
+    svg(
+      'svg',
+      { viewBox: '0 0 20 20', width: 20, height: 20, 'aria-hidden': 'true' },
+      svg('circle', { ...circulo, 'stroke-opacity': 0.22 }),
+      svg('circle', {
+        ...circulo,
+        'stroke-linecap': 'round',
+        'stroke-dasharray': `${(fracao * volta).toFixed(2)} ${volta.toFixed(2)}`,
+        transform: 'rotate(-90 10 10)',
+      }),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------- ações
@@ -55,8 +50,8 @@ function alternar(habito, dia) {
   gravar(habito, dia, proximaMarca(estado.registros[habito.id]?.[dia]));
 }
 
-function rotuloDia(dia) {
-  if (dia === hoje()) return 'hoje';
+function rotuloDia(dia, diaHoje) {
+  if (dia === diaHoje) return 'hoje';
   const data = deIso(dia);
   return `${DIAS_SEMANA[data.getDay()]}., dia ${data.getDate()}`;
 }
@@ -86,7 +81,7 @@ function pedirValor(habito, dia) {
 
   const unidade = habito.unidade ? ` ${habito.unidade}` : '';
   const fechar = abrirFolha({
-    titulo: `${habito.nome} (${rotuloDia(dia)})`,
+    titulo: `${habito.nome} (${rotuloDia(dia, hoje())})`,
     corpo: h(
       'form',
       { class: 'folha-form', onsubmit: aoSalvar },
@@ -138,7 +133,7 @@ function editarHabito(habito) {
     type: 'text',
     value: habito?.nome ?? '',
     placeholder: 'Ex.: Leitura - 1h',
-    maxLength: 60,
+    maxLength: LIMITES.nomeHabito,
     required: true,
   });
   const unidade = h('input', {
@@ -146,7 +141,7 @@ function editarHabito(habito) {
     type: 'text',
     value: habito?.unidade ?? '',
     placeholder: 'copos',
-    maxLength: 12,
+    maxLength: LIMITES.unidade,
   });
   const meta = h('input', {
     class: 'entrada',
@@ -280,7 +275,7 @@ function editarHabito(habito) {
 
 // --------------------------------------------------------------- desenho
 
-function celula(habito, dia) {
+function celula(habito, dia, diaHoje) {
   const valor = estado.registros[habito.id]?.[dia];
   const base = { type: 'button' };
 
@@ -293,7 +288,7 @@ function celula(habito, dia) {
       {
         ...base,
         class: `cel num${numero == null && !pulado ? ' vazio' : ''}${numero != null && !cumprido(habito, numero) ? ' parcial' : ''}`,
-        'aria-label': `${habito.nome}, ${rotuloDia(dia)}: ${estadoTexto}`,
+        'aria-label': `${habito.nome}, ${rotuloDia(dia, diaHoje)}: ${estadoTexto}`,
         onclick: () => pedirValor(habito, dia),
       },
       pulado
@@ -309,7 +304,7 @@ function celula(habito, dia) {
     {
       ...base,
       class: `cel${marca === 'x' ? ' vazio' : ''}`,
-      'aria-label': `${habito.nome}, ${rotuloDia(dia)}: ${estadoTexto}`,
+      'aria-label': `${habito.nome}, ${rotuloDia(dia, diaHoje)}: ${estadoTexto}`,
       onclick: () => alternar(habito, dia),
     },
     icone(marca, { tam: marca === 'x' ? 16 : 20 }),
@@ -326,7 +321,8 @@ function render(raiz) {
   // hábito fica com pelo menos 44% da largura. No Galaxy A36 isso dá 6 dias.
   const largura = (raiz.clientWidth || window.innerWidth) - 18;
   const n = Math.max(3, Math.min(10, Math.floor((largura * 0.56) / 44)));
-  const dias = Array.from({ length: n }, (_, i) => somaDias(hoje(), -i));
+  const diaHoje = hoje(); // uma leitura do relógio por desenho: cabeçalho e células usam o mesmo dia
+  const dias = Array.from({ length: n }, (_, i) => somaDias(diaHoje, -i));
 
   raiz.replaceChildren(
     h(
@@ -340,7 +336,7 @@ function render(raiz) {
           const data = deIso(dia);
           return h(
             'div',
-            { class: `dia${dia === hoje() ? ' hoje' : ''}` },
+            { class: `dia${dia === diaHoje ? ' hoje' : ''}` },
             h('span', {}, DIAS_SEMANA[data.getDay()]),
             h('b', {}, data.getDate()),
           );
@@ -358,10 +354,10 @@ function render(raiz) {
               'aria-label': `Editar ${habito.nome}`,
               onclick: () => editarHabito(habito),
             },
-            anel(habito),
+            anel(habito, diaHoje),
             h('span', {}, habito.nome),
           ),
-          dias.map((dia) => celula(habito, dia)),
+          dias.map((dia) => celula(habito, dia, diaHoje)),
         ),
       ),
     ),

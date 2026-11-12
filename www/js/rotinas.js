@@ -2,8 +2,9 @@
 // As marcas valem para o dia corrente e zeram sozinhas no dia seguinte.
 
 import { estado, salvar, marcasDeHoje } from './store.js';
-import { uid } from './ids.js';
-import { textoParaItens, itensParaTexto } from './rotina-texto.js';
+import { uid } from './nucleo/ids.js';
+import { LIMITES } from './nucleo/esquema.js';
+import { textoParaItens, itensParaTexto } from './nucleo/rotina-texto.js';
 import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
 
 // ---------------------------------------------------------------- ações
@@ -24,7 +25,7 @@ function editarRotina(rotina) {
     type: 'text',
     value: rotina?.nome ?? '',
     placeholder: 'Ex.: Home Office',
-    maxLength: 60,
+    maxLength: LIMITES.nomeRotina,
     required: true,
   });
   const texto = h('textarea', {

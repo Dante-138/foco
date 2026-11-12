@@ -3,29 +3,48 @@
 // "# Nome" abre uma seção e um horário no começo da linha (22:30) é opcional.
 
 import { uid } from './ids.js';
+import { LIMITES } from './esquema.js';
 
-const MARCADOR = /^(\[[ xX]?\]|[-*•☐☑✓✔])\s*/; // restos de checklist colado de outro app
+// Restos de checklist colado de outro app, removidos do começo da linha:
+// caixa "[ ]" ou "[x]", símbolos de caixa, e marcador de lista seguido de
+// espaço ou sozinho na linha. Repete até não sobrar nenhum, para cobrir o
+// "- [ ] item" do Markdown. "-5 graus" e "*importante*" ficam intactos:
+// colado ao texto, o hífen ou o asterisco não é marcador.
+const MARCADOR = /^(?:\[[ xX]?\]\s*|[☐☑✓✔]\s*|[-*•](?:\s+|$))/;
 const HORARIO = /^(\d{1,2}):(\d{2})\s+(.+)$/;
 
+function semMarcadores(linha) {
+  let texto = linha.trim();
+  while (MARCADOR.test(texto)) texto = texto.replace(MARCADOR, '');
+  return texto;
+}
+
 function linhaParaItem(linha) {
-  let texto = linha.trim().replace(MARCADOR, '');
+  let texto = semMarcadores(linha);
   if (!texto) return null;
 
   if (texto.startsWith('#')) {
-    texto = texto.replace(/^#+\s*/, '');
+    texto = texto
+      .replace(/^#+\s*/, '')
+      .slice(0, LIMITES.textoItem)
+      .trim();
     return texto ? { tipo: 'secao', texto, hora: null } : null;
   }
 
   const m = texto.match(HORARIO);
   if (m && Number(m[1]) < 24 && Number(m[2]) < 60) {
-    const resto = m[3].replace(/^[-–—]\s*/, '').trim();
+    const resto = m[3]
+      .replace(/^[-–—]\s*/, '')
+      .slice(0, LIMITES.textoItem)
+      .trim();
     if (resto) return { tipo: 'item', texto: resto, hora: `${m[1].padStart(2, '0')}:${m[2]}` };
   }
-  return { tipo: 'item', texto, hora: null };
+  return { tipo: 'item', texto: texto.slice(0, LIMITES.textoItem).trim(), hora: null };
 }
 
 // Reaproveita o id de quem manteve o mesmo texto, para a edição não apagar
 // as marcas de hoje. Mudar só o horário de um item preserva a marca.
+// Linhas além do limite de itens por rotina são descartadas.
 export function textoParaItens(texto, antigos = [], gerarId = uid) {
   const chave = (i) => `${i.tipo}|${i.texto}`;
   const livres = new Map();
@@ -38,6 +57,7 @@ export function textoParaItens(texto, antigos = [], gerarId = uid) {
     .split(/\r?\n/)
     .map(linhaParaItem)
     .filter(Boolean)
+    .slice(0, LIMITES.itensPorRotina)
     .map((item) => ({ id: livres.get(chave(item))?.shift() ?? gerarId(), ...item }));
 }
 

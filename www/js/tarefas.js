@@ -2,12 +2,11 @@
 // As tarefas aparecem agrupadas por data; as sem data ficam no fim.
 
 import { estado, salvar } from './store.js';
-import { uid } from './ids.js';
-import { hoje, somaDias } from './datas.js';
-import { agrupar, rotuloData } from './prazos.js';
+import { uid } from './nucleo/ids.js';
+import { hoje, somaDias } from './nucleo/datas.js';
+import { LIMITES, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
+import { agrupar, rotuloData } from './nucleo/prazos.js';
 import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
-
-const ESTRELA = 'estrela'; // valor de estado.listaAtiva para a visão "com estrela"
 
 let concluidasAbertas = false;
 
@@ -35,7 +34,7 @@ function editarTarefa(tarefa) {
     type: 'text',
     value: tarefa?.titulo ?? '',
     placeholder: 'Nova tarefa',
-    maxLength: 200,
+    maxLength: LIMITES.tituloTarefa,
     required: true,
     autocomplete: 'off',
   });
@@ -44,6 +43,7 @@ function editarTarefa(tarefa) {
     rows: 2,
     value: tarefa?.notas ?? '',
     placeholder: 'Detalhes (opcional)',
+    maxLength: LIMITES.notasTarefa,
   });
   const prazo = h('input', { class: 'entrada', type: 'date', value: tarefa?.prazo ?? '' });
   const lista = h(
@@ -79,7 +79,8 @@ function editarTarefa(tarefa) {
       titulo: tituloFinal,
       notas: notas.value.trim(),
       prazo: prazo.value || null,
-      listaId: lista.value,
+      // Sem opção selecionada (lista da tarefa não existe mais), cai na primeira lista.
+      listaId: lista.value || estado.listas[0].id,
     };
     if (tarefa) {
       Object.assign(tarefa, dados);
@@ -142,7 +143,7 @@ function editarLista(lista) {
     type: 'text',
     value: lista?.nome ?? '',
     placeholder: 'Ex.: Faculdade',
-    maxLength: 40,
+    maxLength: LIMITES.nomeLista,
     required: true,
   });
 
