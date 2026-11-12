@@ -1,6 +1,7 @@
 // Ponto de entrada: navegação entre as três abas e redesenho.
 
-import { estado, salvar, hoje } from './store.js';
+import { estado, salvar } from './store.js';
+import { hoje } from './datas.js';
 import { h, icone, avisar } from './ui.js';
 import { rotinas } from './rotinas.js';
 import { habitos } from './habitos.js';

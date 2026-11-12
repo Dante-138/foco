@@ -5,20 +5,20 @@
   color-scheme: dark;
 
   --fundo: #000000;
-  --sup-1: #111113;             /* cartões */
-  --sup-2: #1b1b1e;             /* folhas */
-  --campo: #111113;             /* campos de formulário */
-  --toque: #2a2a2e;             /* fundo de item pressionado */
-  --barra: #09090a;             /* barra de abas */
+  --sup-1: #111113; /* cartões */
+  --sup-2: #1b1b1e; /* folhas */
+  --campo: #111113; /* campos de formulário */
+  --toque: #2a2a2e; /* fundo de item pressionado */
+  --barra: #09090a; /* barra de abas */
   --linha: #2a2a2e;
   --pega: #4a4a50;
   --texto: #ededed;
   --texto-2: #9b9ba1;
-  --texto-3: #606067;           /* item concluído */
-  --apagado: #3d3d42;           /* marca de "não feito" */
+  --texto-3: #606067; /* item concluído */
+  --apagado: #3d3d42; /* marca de "não feito" */
   --acento: #8ab4f8;
   --acento-fundo: #24365c;
-  --sobre-acento: #d6e4ff;      /* texto sobre --acento-fundo */
+  --sobre-acento: #d6e4ff; /* texto sobre --acento-fundo */
   --sobre-acento-forte: #06162f; /* texto sobre --acento */
   --fab-fundo: #24365c;
   --fab-texto: #d6e4ff;
@@ -44,7 +44,7 @@
 }
 
 /* Tema claro: cartões brancos sobre cinza bem claro. */
-:root[data-tema="claro"] {
+:root[data-tema='claro'] {
   color-scheme: light;
 
   --fundo: #f2f2f7;
@@ -106,7 +106,11 @@ body {
   margin: 0 auto;
   background: var(--fundo);
   color: var(--texto);
-  font: 400 15px/1.35 system-ui, "Roboto", "Segoe UI", sans-serif;
+  font:
+    400 15px/1.35 system-ui,
+    'Roboto',
+    'Segoe UI',
+    sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
 }
@@ -715,7 +719,7 @@ textarea.entrada {
 
 textarea.editor {
   min-height: 42dvh;
-  font-family: ui-monospace, "Roboto Mono", Consolas, monospace;
+  font-family: ui-monospace, 'Roboto Mono', Consolas, monospace;
   font-size: 14px;
   line-height: 1.55;
 }
@@ -730,7 +734,7 @@ textarea.editor {
   border-radius: 5px;
   background: var(--campo);
   color: var(--texto);
-  font-family: ui-monospace, "Roboto Mono", Consolas, monospace;
+  font-family: ui-monospace, 'Roboto Mono', Consolas, monospace;
 }
 
 .linha-botoes {

@@ -177,7 +177,12 @@ export function campo(rotulo, entrada) {
 }
 
 export function estadoVazio(titulo, dica) {
-  return h('div', { class: 'sem-conteudo' }, h('p', { class: 'sem-conteudo-titulo' }, titulo), h('p', {}, dica));
+  return h(
+    'div',
+    { class: 'sem-conteudo' },
+    h('p', { class: 'sem-conteudo-titulo' }, titulo),
+    h('p', {}, dica),
+  );
 }
 
 export function avisar(texto) {

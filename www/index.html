@@ -1,27 +1,30 @@
 <!doctype html>
 <html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <!-- interactive-widget=resizes-content: o teclado encolhe a página, e as folhas de edição sobem junto -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-  <meta name="theme-color" content="#000000">
-  <title>Foco</title>
-  <!-- Síncrono e antes do CSS: define o tema antes do primeiro desenho -->
-  <script src="js/tema-inicial.js"></script>
-  <link rel="stylesheet" href="css/app.css">
-</head>
-<body>
-  <header class="topo">
-    <h1 id="titulo"></h1>
-    <button id="ajustes" class="botao-icone" type="button" aria-label="Ajustes"></button>
-  </header>
+  <head>
+    <meta charset="utf-8" />
+    <!-- interactive-widget=resizes-content: o teclado encolhe a página, e as folhas de edição sobem junto -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#000000" />
+    <title>Foco</title>
+    <!-- Síncrono e antes do CSS: define o tema antes do primeiro desenho -->
+    <script src="js/tema-inicial.js"></script>
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <header class="topo">
+      <h1 id="titulo"></h1>
+      <button id="ajustes" class="botao-icone" type="button" aria-label="Ajustes"></button>
+    </header>
 
-  <main id="conteudo"></main>
+    <main id="conteudo"></main>
 
-  <button id="fab" class="fab" type="button"></button>
+    <button id="fab" class="fab" type="button"></button>
 
-  <nav id="abas" class="abas" aria-label="Seções"></nav>
+    <nav id="abas" class="abas" aria-label="Seções"></nav>
 
-  <script type="module" src="js/app.js"></script>
-</body>
+    <script type="module" src="js/app.js"></script>
+  </body>
 </html>

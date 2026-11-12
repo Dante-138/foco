@@ -10,7 +10,9 @@ function lerSalvo() {
   try {
     const salvo = localStorage.getItem(CHAVE);
     if (VALIDOS.includes(salvo)) return salvo;
-  } catch { /* armazenamento indisponível */ }
+  } catch {
+    /* armazenamento indisponível */
+  }
   return 'escuro';
 }
 
@@ -32,7 +34,9 @@ export function definirTema(valor) {
   escolhido = valor;
   try {
     localStorage.setItem(CHAVE, valor);
-  } catch { /* sem armazenamento, vale só nesta sessão */ }
+  } catch {
+    /* sem armazenamento, vale só nesta sessão */
+  }
   aplicarTema();
 }
 
