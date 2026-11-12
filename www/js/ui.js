@@ -108,11 +108,11 @@ export function icone(nome, { cheio = false, tam = 24 } = {}) {
 // no histórico do navegador. O voltar (gesto ou botão do Android, ou o do
 // navegador) consome essa entrada e fecha a folha de cima em vez de sair do app.
 //
-// O histórico nunca é mexido na hora em que uma folha abre ou fecha: isso só
-// marca que é preciso conferir. A conferência roda depois, uma vez, e compara o
-// que deveria existir com o que existe. Assim "fechar uma folha e abrir outra em
-// seguida" não gera um vai e volta no histórico, e uma volta pedida pelo app
-// nunca corre junto com uma entrada nova.
+// A guarda entra na hora em que a primeira folha abre. A retirada é adiada: fechar
+// uma folha só marca que é preciso conferir, e a conferência roda depois, uma vez,
+// comparando o que deveria existir com o que existe. Assim "fechar uma folha e
+// abrir outra em seguida" não gera um vai e volta no histórico, e uma volta
+// pedida pelo app nunca corre junto com uma entrada nova.
 const folhasAbertas = []; // pilha: a última é a folha de cima
 let guardaNoHistorico = false; // a entrada de guarda existe
 let voltaEmAndamento = false; // o app pediu history.back() e o popstate ainda não chegou
@@ -193,7 +193,9 @@ export function abrirFolha({ titulo, corpo, fecharNoFundo = true, aoFechar, aoTe
   dialogo.addEventListener('close', finalizar);
 
   folhasAbertas.push(registro);
-  agendarAcerto();
+  // Ao abrir, a guarda entra na hora (se não houver volta em andamento), para o
+  // voltar já encontrar a entrada. Só a retirada da guarda é adiada.
+  acertarHistorico();
 
   // Tecla Esc: fechamos nós mesmos, na hora.
   dialogo.addEventListener('cancel', (e) => {
