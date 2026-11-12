@@ -13,11 +13,9 @@ rotinas do dia, hábitos e tarefas com prazo.
 - **Tarefas**: listas com prazo, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
 
-Os dados ficam só no aparelho (`localStorage`). Nada é enviado para servidor.
-
 ## Como rodar
 
-Requer Node.js 22 ou mais novo. O app em si não tem dependências nem etapa de build.
+Requer Node.js 22.8 ou mais novo. O app em si não tem dependências nem etapa de build.
 
 ```bash
 node tools/serve.mjs
@@ -35,43 +33,73 @@ Depois acesse `http://localhost:8137` no Chrome do celular.
 
 ## Desenvolvimento
 
-As dependências são só de desenvolvimento (ESLint e Prettier). Os testes usam o executor
-nativo do Node.
+As dependências são só de desenvolvimento (ESLint, Prettier e playwright-core). Os testes usam
+o executor nativo do Node; os de ponta a ponta abrem o Google Chrome instalado na máquina.
 
 ```bash
-npm install       # uma vez
-npm run dev       # servidor local em http://localhost:8137
-npm run check     # lint, formatação e testes: o mesmo que o CI roda
-npm run format    # formata o código com o Prettier
+npm install         # uma vez
+npm run dev         # servidor local em http://localhost:8137
+npm run check       # lint, formatação, testes de unidade e de ponta a ponta
+npm run commits     # confere as mensagens de commit do branch contra a main
+npm run format      # formata o código com o Prettier
 ```
 
-Cada mudança entra por pull request, e o CI precisa passar antes do merge.
-As mensagens de commit seguem o padrão Conventional Commits.
+## Portão de qualidade
+
+Nada entra na `main` sem pull request, e o merge só é liberado com o job `Gate` do CI verde.
+A regra vale também para o dono do repositório. O portão confere, nesta ordem:
+
+1. **Mensagens de commit e título do PR** no padrão Conventional Commits, com até 72 caracteres
+   e sem linha de coautoria.
+2. **Lint sem nenhum aviso**, e sem comentário de exceção: o `eslint-disable` é proibido.
+   Além dos erros comuns, o lint impõe a estrutura descrita abaixo.
+3. **Formatação** conferida pelo Prettier.
+4. **Testes de unidade** com cobertura de 100% de linhas, desvios e funções do núcleo.
+   Um módulo novo no núcleo sem teste reprova.
+5. **Testes de ponta a ponta** em um Chrome real: os fluxos das três abas, o tema, dados
+   salvos com problema, duas abas abertas e a política de segurança. Qualquer erro no console
+   da página reprova.
+
+O merge é sempre por squash: cada pull request vira um commit na `main`, com o título do PR.
 
 ## Estrutura
 
+O código tem duas camadas, e o lint impede que elas se misturem.
+
 ```text
-www/                    app em HTML, CSS e JavaScript puro (módulos ES)
-  index.html
-  css/app.css
-  js/app.js             navegação entre as abas
-  js/store.js           estado e persistência
-  js/migracao.js        atualização de dados de versões anteriores
-  js/ui.js              elementos, ícones e folhas
-  js/tema.js            tema claro, escuro ou do sistema
-  js/tema-inicial.js    aplica o tema antes do primeiro desenho
-  js/ajustes.js         folha de ajustes
-  js/rotinas.js         aba Rotinas
-  js/rotina-texto.js    conversão entre o texto do editor e os itens
-  js/habitos.js         aba Hábitos
-  js/habito-calculo.js  metas e taxa de cumprimento
-  js/tarefas.js         aba Tarefas
-  js/prazos.js          ordenação e agrupamento por prazo
-  js/datas.js           datas no fuso local
-  js/ids.js             identificadores
-tests/                  testes da lógica (node --test)
-tools/serve.mjs         servidor estático de desenvolvimento
+www/js/nucleo/          lógica pura: roda sem navegador, não toca DOM nem armazenamento
+  esquema.js            formato dos dados e a validação que impõe esse formato
+  estado.js             leitura do estado salvo: JSON, migração e validação
+  migracao.js           atualização de dados de versões anteriores
+  rotina-texto.js       conversão entre o texto do editor e os itens da rotina
+  prazos.js             ordenação e agrupamento das tarefas por prazo
+  habito-calculo.js     leitura de números, metas e taxa de cumprimento
+  datas.js              datas no fuso local
+  paleta.js             cores dos hábitos
+  ids.js                identificadores
+
+www/js/                 interface: monta o DOM e chama o núcleo
+  app.js                ponto de entrada e navegação entre as abas
+  store.js              único módulo de dados que acessa o armazenamento
+  ui.js                 elementos, ícones e folhas
+  rotinas.js, habitos.js, tarefas.js
+  ajustes.js, tema.js, tema-inicial.js
+
+tests/unidade/          testes do núcleo e das ferramentas (node --test)
+tests/e2e/              testes de ponta a ponta no Chrome
+tools/                  servidor de desenvolvimento e portão de commits
 ```
+
+## Dados e segurança
+
+- Os dados ficam só no aparelho (`localStorage`). O app não faz nenhuma conexão de rede, e a
+  política de segurança da página (CSP) bloqueia qualquer tentativa.
+- Todo dado lido do armazenamento passa por migração e validação antes de chegar à interface.
+  O que dá para aproveitar é corrigido, o resto é descartado, e uma cópia do conteúdo original
+  fica guardada quando há correção.
+- Dados gravados por uma versão mais nova do app nunca são sobrescritos: o app avisa e não abre.
+- A interface não usa HTML em texto. O DOM é montado elemento por elemento, o lint proíbe
+  `innerHTML` e a página exige Trusted Types.
 
 ## Próximos passos
 
