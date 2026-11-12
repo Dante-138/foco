@@ -2,6 +2,14 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
+    <!--
+      Política de segurança: só scripts e estilos do próprio app, nenhuma conexão
+      de rede e nenhuma atribuição de HTML em texto (Trusted Types).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'"
+    />
     <!-- interactive-widget=resizes-content: o teclado encolhe a página, e as folhas de edição sobem junto -->
     <meta
       name="viewport"
@@ -9,6 +17,7 @@
     />
     <meta name="theme-color" content="#000000" />
     <title>Foco</title>
+    <link rel="icon" type="image/svg+xml" href="icone.svg" />
     <!-- Síncrono e antes do CSS: define o tema antes do primeiro desenho -->
     <script src="js/tema-inicial.js"></script>
     <link rel="stylesheet" href="css/app.css" />

@@ -30,33 +30,76 @@ export function redesenhar() {
   document.dispatchEvent(new Event('foco:redesenhar'));
 }
 
-// --------------------------------------------------------------- ícones
+// ------------------------------------------------------------------ SVG
 
-const TRACOS = {
-  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
-  x: '<path d="M7 7l10 10M17 7L7 17"/>',
-  menos: '<path d="M7 12h10"/>',
-  mais: '<path d="M12 5v14M5 12h14"/>',
-  pontos:
-    '<g fill="currentColor" stroke="none"><circle cx="12" cy="5.5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="18.5" r="1.7"/></g>',
-  estrela: '<path d="M12 3.8l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/>',
-  cima: '<path d="M6 14.5l6-6 6 6"/>',
-  baixo: '<path d="M6 9.5l6 6 6-6"/>',
-  ajustes:
-    '<path d="M4 7h8M18 7h2M4 17h2M12 17h8"/><circle cx="15" cy="7" r="2.5"/><circle cx="9" cy="17" r="2.5"/>',
-  rotinas: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
-  habitos: '<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.3l2.5 2.5 4.9-5.3"/>',
-  tarefas:
-    '<path d="M3.5 6.5L5 8l2.5-3M3.5 12.5L5 14l2.5-3M3.5 18.5L5 20l2.5-3M11 6.5h9.5M11 12.5h9.5M11 18.5h9.5"/>',
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Cria um elemento SVG. Como em h(), nada é interpretado como HTML: o app não
+// usa innerHTML em lugar nenhum (o lint e a política de segurança da página proíbem).
+export function svg(tag, atributos = {}, ...filhos) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [nome, valor] of Object.entries(atributos)) el.setAttribute(nome, String(valor));
+  el.append(...filhos);
+  return el;
+}
+
+const ponto = (cy) => ['circle', { cx: 12, cy, r: 1.7, fill: 'currentColor', stroke: 'none' }];
+
+// Cada ícone é uma lista de formas [tag, atributos] em uma área de 24 x 24.
+const ICONES = {
+  check: [['path', { d: 'M5 12.5l4.5 4.5L19 7.5' }]],
+  x: [['path', { d: 'M7 7l10 10M17 7L7 17' }]],
+  menos: [['path', { d: 'M7 12h10' }]],
+  mais: [['path', { d: 'M12 5v14M5 12h14' }]],
+  pontos: [ponto(5.5), ponto(12), ponto(18.5)],
+  estrela: [['path', { d: 'M12 3.8l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8z' }]],
+  cima: [['path', { d: 'M6 14.5l6-6 6 6' }]],
+  baixo: [['path', { d: 'M6 9.5l6 6 6-6' }]],
+  ajustes: [
+    ['path', { d: 'M4 7h8M18 7h2M4 17h2M12 17h8' }],
+    ['circle', { cx: 15, cy: 7, r: 2.5 }],
+    ['circle', { cx: 9, cy: 17, r: 2.5 }],
+  ],
+  rotinas: [
+    ['circle', { cx: 12, cy: 12, r: 8.5 }],
+    ['path', { d: 'M12 7.5V12l3 2' }],
+  ],
+  habitos: [
+    ['circle', { cx: 12, cy: 12, r: 8.5 }],
+    ['path', { d: 'M8.3 12.3l2.5 2.5 4.9-5.3' }],
+  ],
+  tarefas: [
+    [
+      'path',
+      {
+        d: 'M3.5 6.5L5 8l2.5-3M3.5 12.5L5 14l2.5-3M3.5 18.5L5 20l2.5-3M11 6.5h9.5M11 12.5h9.5M11 18.5h9.5',
+      },
+    ],
+  ],
 };
 
 export function icone(nome, { cheio = false, tam = 24 } = {}) {
-  const span = h('span', { class: `icone${cheio ? ' cheio' : ''}` });
-  // innerHTML só com as constantes acima, nunca com dado do usuário.
-  span.innerHTML =
-    `<svg viewBox="0 0 24 24" width="${tam}" height="${tam}" fill="none" stroke="currentColor" ` +
-    `stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TRACOS[nome]}</svg>`;
-  return span;
+  const formas = ICONES[nome];
+  if (!formas) throw new Error(`Ícone desconhecido: ${nome}`);
+  return h(
+    'span',
+    { class: `icone${cheio ? ' cheio' : ''}` },
+    svg(
+      'svg',
+      {
+        viewBox: '0 0 24 24',
+        width: tam,
+        height: tam,
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': 2,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+        'aria-hidden': 'true',
+      },
+      ...formas.map(([tag, atributos]) => svg(tag, atributos)),
+    ),
+  );
 }
 
 // --------------------------------------------------------------- folhas
