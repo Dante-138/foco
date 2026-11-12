@@ -56,6 +56,23 @@ export function salvar() {
   }
 }
 
+// Troca todo o estado pelo de um backup já validado (nucleo/backup.js).
+// Antes de gravar, o conteúdo atual vai para a cópia de segurança.
+// Devolve false quando o app está bloqueado por dados de versão mais nova.
+export function substituirEstado(novo) {
+  if (problemaDeCarga === PROBLEMA.VERSAO_MAIS_NOVA) return false;
+  try {
+    const atual = localStorage.getItem(CHAVE);
+    if (atual) localStorage.setItem(CHAVE_COPIA, atual);
+  } catch {
+    /* sem espaço para a cópia: segue sem ela */
+  }
+  for (const chave of Object.keys(estado)) delete estado[chave];
+  Object.assign(estado, novo);
+  salvar();
+  return true;
+}
+
 // As marcas das rotinas valem só para o dia corrente: virou o dia, zera.
 export function marcasDeHoje() {
   if (estado.marcasRotina.data !== hoje()) {

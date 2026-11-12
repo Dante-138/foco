@@ -759,8 +759,21 @@ textarea.editor {
   gap: 8px;
 }
 
+.linha-botoes.inicio {
+  justify-content: flex-start;
+}
+
 .espaco {
   flex: 1;
+}
+
+.botao.contorno {
+  border: 1px solid var(--linha);
+  color: var(--texto);
+}
+
+.dica.erro {
+  color: var(--perigo);
 }
 
 .botao {
