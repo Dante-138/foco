@@ -596,6 +596,14 @@ ul {
   overflow-wrap: anywhere;
 }
 
+.tarefa-sub.nota {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
 .tarefa-sub.atrasada {
   color: var(--perigo);
 }
