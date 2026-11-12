@@ -1,14 +1,45 @@
 apply plugin: 'com.android.application'
 
+// Assinatura do APK de release.
+// A chave e a senha ficam fora do repositório. O build recebe só o caminho de um
+// arquivo de propriedades, com -Pfoco.assinatura=<arquivo> (modelo em
+// docker/android/assinatura.properties.exemplo). Nada do conteúdo é impresso.
+def arquivoDeAssinatura = providers.gradleProperty('foco.assinatura').orNull
+def assinatura = new Properties()
+if (arquivoDeAssinatura) {
+    file(arquivoDeAssinatura).withInputStream { assinatura.load(it) }
+    ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { campo ->
+        if (!assinatura.getProperty(campo)) {
+            throw new GradleException("Arquivo de assinatura sem o campo obrigatório: ${campo}")
+        }
+    }
+}
+
+// Sem assinatura, o Gradle geraria um APK de release que não instala. Melhor falhar cedo.
+def pediuRelease = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+if (pediuRelease && !arquivoDeAssinatura) {
+    throw new GradleException('Build de release exige -Pfoco.assinatura=<arquivo de propriedades da assinatura>')
+}
+
 android {
     namespace = "io.github.dante138.foco"
     compileSdk = rootProject.ext.compileSdkVersion
+    signingConfigs {
+        release {
+            if (arquivoDeAssinatura) {
+                storeFile file(assinatura.getProperty('storeFile'))
+                storePassword assinatura.getProperty('storePassword')
+                keyAlias assinatura.getProperty('keyAlias')
+                keyPassword assinatura.getProperty('keyPassword')
+            }
+        }
+    }
     defaultConfig {
         applicationId "io.github.dante138.foco"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "0.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -20,6 +51,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (arquivoDeAssinatura) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
