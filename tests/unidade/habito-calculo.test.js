@@ -1,22 +1,67 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cumprido, formatar, lerNumero, metaDe, proximaMarca, taxa } from '../www/js/habito-calculo.js';
+import {
+  JANELA_ANEL,
+  cumprido,
+  formatar,
+  lerNumero,
+  metaDe,
+  proximaMarca,
+  taxa,
+} from '../../www/js/nucleo/habito-calculo.js';
 
 const simNao = { tipo: 'simnao' };
 const copos = { tipo: 'numero', meta: 2, unidade: 'copos' };
 const HOJE = '2026-11-12';
 
-test('lerNumero aceita vírgula ou ponto', () => {
+test('lerNumero aceita vírgula ou ponto como decimal', () => {
   assert.equal(lerNumero('1,5'), 1.5);
   assert.equal(lerNumero('1.5'), 1.5);
+  assert.equal(lerNumero('1.50'), 1.5);
+  assert.equal(lerNumero('0.500'), 0.5);
+  assert.equal(lerNumero('0,25'), 0.25);
   assert.equal(lerNumero(' 2 '), 2);
   assert.equal(lerNumero('0'), 0);
+  assert.equal(lerNumero('1500'), 1500);
+  assert.equal(lerNumero(3), 3);
 });
 
-test('lerNumero recusa texto, vazio e número negativo', () => {
-  assert.equal(lerNumero('abc'), null);
-  assert.equal(lerNumero(''), null);
-  assert.equal(lerNumero('-1'), null);
+test('lerNumero trata ponto seguido de três dígitos como milhar', () => {
+  assert.equal(lerNumero('1.500'), 1500);
+  assert.equal(lerNumero('10.000'), 10000);
+  assert.equal(lerNumero('1.234.567'), 1234567);
+  assert.equal(lerNumero('1.500,5'), 1500.5);
+  assert.equal(lerNumero('10.000,25'), 10000.25);
+});
+
+test('lerNumero recusa o que não é número puro', () => {
+  const ruins = [
+    'abc',
+    '',
+    '   ',
+    '-1',
+    '2abc',
+    '3 copos',
+    '1e3',
+    '1,5,3',
+    '1.5.3',
+    '1,',
+    ',5',
+    '.5',
+    '1.500.25',
+  ];
+  for (const ruim of ruins) assert.equal(lerNumero(ruim), null, ruim);
+  assert.equal(lerNumero('Infinity'), null);
+  assert.equal(lerNumero(null), null);
+  assert.equal(lerNumero(undefined), null);
+});
+
+test('lerNumero recusa número grande demais para ser representado', () => {
+  assert.equal(lerNumero('9'.repeat(400)), null);
+});
+
+test('a janela do anel é de uma semana', () => {
+  assert.equal(JANELA_ANEL, 7);
 });
 
 test('formatar usa vírgula decimal', () => {
