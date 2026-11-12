@@ -319,6 +319,58 @@ test('duas abas: o que uma grava aparece na outra, sem sobrescrever', async (t) 
   assert.deepEqual(erros, []);
 });
 
+// --------------------------------------------------------------- botão voltar
+
+test('voltar fecha a folha aberta em vez de sair do app', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const folhas = () => pagina.locator('dialog[open]').count();
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await visivel(pagina.getByText('Novo hábito', { exact: true }));
+  await pagina.goBack();
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+
+  // O app continua aberto, na mesma aba, e a folha abre de novo normalmente.
+  await visivel(pagina.getByText('Nenhum hábito ainda'));
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+  await visivel(botao(pagina, 'Leitura, hoje: não feito'));
+  assert.equal(await folhas(), 0);
+  assert.deepEqual(erros, []);
+});
+
+test('voltar com texto não salvo na rotina pergunta antes de descartar', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const folhas = () => pagina.locator('dialog[open]').count();
+
+  await botao(pagina, 'Nova rotina').click();
+  await pagina.getByLabel('Itens').fill('texto que não foi salvo');
+
+  // Primeiro voltar: a edição continua aberta e aparece a pergunta.
+  await pagina.goBack();
+  await visivel(pagina.getByText('Descartar as alterações?'));
+  assert.equal(await folhas(), 2);
+
+  // Segundo voltar: fecha só a pergunta; o texto continua lá.
+  await pagina.goBack();
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog[open]').length === 1, null, ESPERA);
+  assert.equal(await pagina.getByLabel('Itens').inputValue(), 'texto que não foi salvo');
+
+  // Terceiro voltar pergunta de novo; desta vez descarta.
+  await pagina.goBack();
+  await botao(pagina, 'Descartar').click();
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  // A conta do histórico fechou: um voltar a mais não reabre nem quebra nada.
+  await botao(pagina, 'Nova rotina').click();
+  await pagina.goBack();
+  await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
+  assert.deepEqual(erros, []);
+});
+
 // --------------------------------------------------------- barras do sistema
 
 test('barras do sistema: o topo e a barra de abas respeitam a área segura', async (t) => {

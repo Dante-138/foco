@@ -104,9 +104,31 @@ export function icone(nome, { cheio = false, tam = 24 } = {}) {
 
 // --------------------------------------------------------------- folhas
 
+// Botão voltar. Cada folha aberta ocupa uma entrada no histórico do navegador:
+// assim o voltar (gesto ou botão do Android, ou o do navegador) fecha a folha
+// de cima em vez de sair do app. A conta é sempre uma entrada por folha aberta.
+const folhasAbertas = []; // pilha: a última é a folha de cima
+let voltasPorCodigo = 0; // history.back() chamados ao fechar pelo app, que o ouvinte deve ignorar
+
+window.addEventListener('popstate', () => {
+  if (voltasPorCodigo > 0) {
+    voltasPorCodigo -= 1;
+    return;
+  }
+  const topo = folhasAbertas.at(-1);
+  if (!topo) return;
+  if (topo.aoTentarFechar) {
+    // A folha vai perguntar antes de fechar: devolve a entrada que o voltar consumiu.
+    window.history.pushState({ folha: true }, '');
+    topo.aoTentarFechar();
+  } else {
+    topo.fecharPeloVoltar();
+  }
+});
+
 // Folha que sobe do rodapé (bottom sheet). Devolve a função que a fecha.
-// aoTentarFechar: chamado no Esc ou no botão voltar do Android, no lugar de
-// fechar direto. Serve para a folha perguntar antes de descartar o que foi digitado.
+// aoTentarFechar: chamado no Esc ou no botão voltar, no lugar de fechar direto.
+// Serve para a folha perguntar antes de descartar o que foi digitado.
 export function abrirFolha({ titulo, corpo, fecharNoFundo = true, aoFechar, aoTentarFechar }) {
   const dialogo = h(
     'dialog',
@@ -124,20 +146,35 @@ export function abrirFolha({ titulo, corpo, fecharNoFundo = true, aoFechar, aoTe
   // A limpeza roda na hora em que fechar() é chamado. O evento "close" do
   // navegador só é entregue no próximo quadro desenhado (e não chega com a
   // página em segundo plano), então fica apenas como rede de segurança.
+  const registro = { aoTentarFechar, fecharPeloVoltar: null };
   let finalizado = false;
-  const finalizar = () => {
+  // peloVoltar: o histórico já andou sozinho; nos outros casos quem anda é o app.
+  const finalizar = (peloVoltar) => {
     if (finalizado) return;
     finalizado = true;
+    const posicao = folhasAbertas.indexOf(registro);
+    if (posicao >= 0) folhasAbertas.splice(posicao, 1);
+    if (!peloVoltar) {
+      voltasPorCodigo += 1;
+      window.history.back();
+    }
     dialogo.remove();
     aoFechar?.();
   };
   const fechar = () => {
     if (dialogo.open) dialogo.close();
-    finalizar();
+    finalizar(false);
   };
-  dialogo.addEventListener('close', finalizar);
+  registro.fecharPeloVoltar = () => {
+    if (dialogo.open) dialogo.close();
+    finalizar(true);
+  };
+  dialogo.addEventListener('close', () => finalizar(false));
 
-  // Esc ou botão voltar do Android: fechamos nós mesmos, na hora.
+  folhasAbertas.push(registro);
+  window.history.pushState({ folha: true }, '');
+
+  // Tecla Esc: fechamos nós mesmos, na hora.
   dialogo.addEventListener('cancel', (e) => {
     if (e.target !== dialogo) return;
     e.preventDefault();
