@@ -17,7 +17,7 @@ Os dados ficam só no aparelho (`localStorage`). Nada é enviado para servidor.
 
 ## Como rodar
 
-Requer Node.js 18 ou mais novo. Não há dependências nem etapa de build.
+Requer Node.js 22 ou mais novo. O app em si não tem dependências nem etapa de build.
 
 ```bash
 node tools/serve.mjs
@@ -33,25 +33,47 @@ adb reverse tcp:8137 tcp:8137
 
 Depois acesse `http://localhost:8137` no Chrome do celular.
 
+## Desenvolvimento
+
+As dependências são só de desenvolvimento (ESLint e Prettier). Os testes usam o executor
+nativo do Node.
+
+```bash
+npm install       # uma vez
+npm run dev       # servidor local em http://localhost:8137
+npm run check     # lint, formatação e testes: o mesmo que o CI roda
+npm run format    # formata o código com o Prettier
+```
+
+Cada mudança entra por pull request, e o CI precisa passar antes do merge.
+As mensagens de commit seguem o padrão Conventional Commits.
+
 ## Estrutura
 
 ```text
-www/                 app em HTML, CSS e JavaScript puro (módulos ES)
+www/                    app em HTML, CSS e JavaScript puro (módulos ES)
   index.html
   css/app.css
-  js/app.js          navegação entre as abas
-  js/store.js        estado e persistência
-  js/ui.js           elementos, ícones e folhas
-  js/tema.js         tema claro, escuro ou do sistema
-  js/tema-inicial.js aplica o tema antes do primeiro desenho
-  js/ajustes.js      folha de ajustes
-  js/rotinas.js
-  js/habitos.js
-  js/tarefas.js
-tools/serve.mjs      servidor estático de desenvolvimento
+  js/app.js             navegação entre as abas
+  js/store.js           estado e persistência
+  js/migracao.js        atualização de dados de versões anteriores
+  js/ui.js              elementos, ícones e folhas
+  js/tema.js            tema claro, escuro ou do sistema
+  js/tema-inicial.js    aplica o tema antes do primeiro desenho
+  js/ajustes.js         folha de ajustes
+  js/rotinas.js         aba Rotinas
+  js/rotina-texto.js    conversão entre o texto do editor e os itens
+  js/habitos.js         aba Hábitos
+  js/habito-calculo.js  metas e taxa de cumprimento
+  js/tarefas.js         aba Tarefas
+  js/prazos.js          ordenação e agrupamento por prazo
+  js/datas.js           datas no fuso local
+  js/ids.js             identificadores
+tests/                  testes da lógica (node --test)
+tools/serve.mjs         servidor estático de desenvolvimento
 ```
 
 ## Próximos passos
 
-- Casca Android (APK) com lembrete de prazo
-- Backup e restauração dos dados
+O roteiro está nas [issues](https://github.com/Dante-138/foco/issues) e nos
+[milestones](https://github.com/Dante-138/foco/milestones) do repositório.
