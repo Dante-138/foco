@@ -12,12 +12,15 @@ import { aplicarTema } from './tema.js';
 import { abrirAjustes } from './ajustes.js';
 import { agendarSincronia } from './lembretes.js';
 
-// Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar().
+// Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
+// flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
 const ABAS = [rotinas, habitos, tarefas];
 
 const titulo = document.getElementById('titulo');
 const conteudo = document.getElementById('conteudo');
 const fab = document.getElementById('fab');
+const fabSecundario = document.getElementById('fab-secundario');
+let acaoSecundaria = null;
 const nav = document.getElementById('abas');
 const botaoAjustes = document.getElementById('ajustes');
 
@@ -32,6 +35,14 @@ function desenhar({ manterRolagem = false } = {}) {
   fab.setAttribute('aria-label', aba.rotuloAdicionar);
   aba.render(conteudo);
   conteudo.scrollTop = manterRolagem ? rolagem : 0;
+
+  const flutuante = aba.flutuante?.() ?? null;
+  acaoSecundaria = flutuante?.acao ?? null;
+  fabSecundario.hidden = !flutuante;
+  if (flutuante) {
+    fabSecundario.setAttribute('aria-label', flutuante.rotulo);
+    fabSecundario.replaceChildren(icone(flutuante.icone, { tam: 22 }));
+  }
 
   nav.replaceChildren(
     ...ABAS.map((a) =>
@@ -124,6 +135,7 @@ function bloquear() {
 function iniciar() {
   fab.append(icone('mais', { tam: 28 }));
   fab.addEventListener('click', () => abaAtual().aoAdicionar());
+  fabSecundario.addEventListener('click', () => acaoSecundaria?.());
 
   botaoAjustes.append(icone('ajustes'));
   botaoAjustes.addEventListener('click', abrirAjustes);

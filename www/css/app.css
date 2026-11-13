@@ -278,6 +278,18 @@ ul {
   filter: brightness(1.2);
 }
 
+/* Segundo botão flutuante, menor, acima do "+": a ação rápida da aba (nas rotinas, desfazer). */
+.fab.secundario {
+  right: max(22px, calc((100vw - var(--largura-max)) / 2 + 22px));
+  bottom: calc(var(--abas-h) + 16px + var(--base-segura) + 68px);
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  background: var(--sup-2);
+  color: var(--texto);
+}
+
 /* ---------------------------------------------------------------- comuns */
 
 .faixa {
@@ -419,12 +431,46 @@ ul {
 }
 
 .rotina-secao {
-  padding: 16px 16px 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 2px 14px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--acento);
+}
+
+/* Caixa do título: marca ou desmarca a seção inteira. Fica alinhada com as caixas dos itens. */
+.secao-caixa {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 36px;
+}
+
+.secao-caixa .caixa {
+  width: 18px;
+  height: 18px;
+  border-color: var(--acento);
+  border-radius: 5px;
+}
+
+.secao-caixa.feito .caixa {
+  background: var(--acento);
+  color: var(--sobre-acento-forte);
+}
+
+.secao-nome {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rotina-secao.marcada .secao-nome {
+  color: var(--texto-3);
 }
 
 .rotina-item {

@@ -284,11 +284,8 @@ test('rotina ligada a hábito: marcar o item marca o hábito; desfazer e desmarc
   assert.deepEqual(erros, []);
 });
 
-test('rotina: item marcado desce para o fim da seção, e o desfazer volta uma marca por vez', async (t) => {
-  const { pagina, erros } = await abrir(t);
-  const ordem = () => pagina.locator('.rotina-item .rotina-texto').allTextContents();
-  const desfazer = botao(pagina, 'Desfazer a última marca');
-
+// Cria a rotina usada nos dois testes abaixo: duas seções, quatro itens.
+async function criarRotinaDaManha(pagina) {
   await botao(pagina, 'Nova rotina').click();
   await pagina.getByLabel('Nome').fill('Manhã');
   await pagina
@@ -296,38 +293,99 @@ test('rotina: item marcado desce para o fim da seção, e o desfazer volta uma m
     .fill('# ACORDAR\nLevantar\nBeber água\nArrumar a cama\n# SAIR\nPegar a chave');
   await botao(pagina, 'Salvar').click();
   await visivel(pagina.getByText('0 de 4 hoje'));
-  assert.equal(await desfazer.isDisabled(), true);
+}
 
-  // Marcados vão para o fim da própria seção, na ordem em que estão escritos.
+test('rotina: item marcado vai para a área de marcados, com a seção repetida, e o desfazer flutua', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const itens = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
+  const secoes = (area) => pagina.locator(`${area} .secao-nome`).allTextContents();
+  const desfazer = botao(pagina, 'Desfazer a última marca');
+
+  await criarRotinaDaManha(pagina);
+  assert.equal(await desfazer.isVisible(), false); // sem marca, não há o que desfazer
+  assert.equal(await pagina.locator('.area-marcados').count(), 0);
+
+  // O item marcado sai da seção e vai para a área de baixo, que repete o nome da seção.
   await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
   await visivel(pagina.getByText('1 de 4 hoje'));
-  assert.deepEqual(await ordem(), ['Beber água', 'Arrumar a cama', 'Levantar', 'Pegar a chave']);
-  await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).click();
-  await pagina.getByRole('checkbox', { name: /Beber água/ }).click();
-  await visivel(pagina.getByText('3 de 4 hoje'));
-  assert.deepEqual(await ordem(), ['Arrumar a cama', 'Levantar', 'Beber água', 'Pegar a chave']);
+  assert.deepEqual(await itens('.area-pendentes'), ['Beber água', 'Arrumar a cama', 'Pegar a chave']);
+  assert.deepEqual(await itens('.area-marcados'), ['Levantar']);
+  assert.deepEqual(await secoes('.area-pendentes'), ['ACORDAR', 'SAIR']);
+  assert.deepEqual(await secoes('.area-marcados'), ['ACORDAR']);
 
-  // Desfazer volta a última marca (Beber água), depois a anterior (Pegar a chave).
-  await desfazer.click();
+  // Seção sem item pendente some da área de cima.
+  await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).click();
   await visivel(pagina.getByText('2 de 4 hoje'));
-  assert.equal(
-    await pagina.getByRole('checkbox', { name: /Beber água/ }).getAttribute('aria-checked'),
-    'false',
-  );
+  assert.deepEqual(await secoes('.area-pendentes'), ['ACORDAR']);
+  assert.deepEqual(await secoes('.area-marcados'), ['ACORDAR', 'SAIR']);
+
+  // O desfazer é um botão flutuante, fora da lista: volta a última marca.
+  assert.equal(await desfazer.evaluate((el) => getComputedStyle(el).position), 'fixed');
   await desfazer.click();
   await visivel(pagina.getByText('1 de 4 hoje'));
-  assert.equal(
-    await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).getAttribute('aria-checked'),
-    'false',
-  );
-  assert.equal(await pagina.getByRole('checkbox', { name: /Levantar/ }).getAttribute('aria-checked'), 'true');
+  assert.deepEqual(await secoes('.area-pendentes'), ['ACORDAR', 'SAIR']);
 
-  // Com a opção desligada, os itens ficam onde foram escritos.
+  // A área de marcados recolhe e abre.
+  await botao(pagina, 'Marcados (1)').click();
+  assert.deepEqual(await itens('.area-marcados'), []);
+  await botao(pagina, 'Marcados (1)').click();
+  assert.deepEqual(await itens('.area-marcados'), ['Levantar']);
+
+  // Com a opção desligada, os itens ficam onde foram escritos e não há área de marcados.
   await botao(pagina, 'Opções da rotina').click();
   await pagina.getByRole('switch', { name: 'Marcados no fim' }).click();
   await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
-  assert.deepEqual(await ordem(), ['Levantar', 'Beber água', 'Arrumar a cama', 'Pegar a chave']);
+  assert.deepEqual(await itens('.area-pendentes'), [
+    'Levantar',
+    'Beber água',
+    'Arrumar a cama',
+    'Pegar a chave',
+  ]);
+  assert.equal(await pagina.locator('.area-marcados').count(), 0);
   assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).marcadosNoFim, false);
+  assert.deepEqual(erros, []);
+});
+
+test('rotina: a caixa da seção marca e desmarca o bloco inteiro, e o desfazer volta o bloco de uma vez', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const itens = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
+  const secoes = (area) => pagina.locator(`${area} .secao-nome`).allTextContents();
+  const desfazer = botao(pagina, 'Desfazer a última marca');
+
+  await criarRotinaDaManha(pagina);
+  await pagina.getByRole('checkbox', { name: /Beber água/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+
+  // Marcar a seção leva de uma vez os dois itens que faltavam nela.
+  await pagina.getByRole('checkbox', { name: 'Marcar a seção ACORDAR', exact: true }).click();
+  await visivel(pagina.getByText('3 de 4 hoje'));
+  assert.deepEqual(await secoes('.area-pendentes'), ['SAIR']);
+  assert.deepEqual(await itens('.area-marcados'), ['Levantar', 'Beber água', 'Arrumar a cama']);
+
+  // Um desfazer volta o bloco marcado de uma vez; o seguinte volta o item marcado antes.
+  await desfazer.click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.deepEqual(await itens('.area-marcados'), ['Beber água']);
+  await desfazer.click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  assert.equal(await desfazer.isVisible(), false);
+
+  // Na área de marcados, a caixa da seção devolve o bloco inteiro.
+  await pagina.getByRole('checkbox', { name: 'Marcar a seção ACORDAR', exact: true }).click();
+  await visivel(pagina.getByText('3 de 4 hoje'));
+  await pagina.getByRole('checkbox', { name: 'Desmarcar a seção ACORDAR' }).click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  assert.deepEqual(await itens('.area-pendentes'), [
+    'Levantar',
+    'Beber água',
+    'Arrumar a cama',
+    'Pegar a chave',
+  ]);
+
+  // Tudo marcado: a área de cima dá o recado.
+  await pagina.getByRole('checkbox', { name: 'Marcar a seção ACORDAR', exact: true }).click();
+  await pagina.getByRole('checkbox', { name: 'Marcar a seção SAIR', exact: true }).click();
+  await visivel(pagina.getByText('Rotina concluída'));
   assert.deepEqual(erros, []);
 });
 
@@ -728,6 +786,47 @@ test('tarefa que se repete: ao concluir, a próxima ocorrência aparece na data 
   await botao(pagina, 'Salvar').click();
   await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
   assert.equal((await salvas()).find((x) => !x.feita).repeticao, null);
+  assert.deepEqual(erros, []);
+});
+
+test('tarefas: mover a lista para os lados muda a ordem na faixa do topo', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 4,
+    aba: 'tarefas',
+    listas: [
+      { id: 'a', nome: 'Trabalho' },
+      { id: 'b', nome: 'Faculdade' },
+      { id: 'c', nome: 'Contas' },
+    ],
+    listaAtiva: 'b',
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  // Os chips do meio são as listas: o primeiro é a estrela e o último é "Nova lista".
+  const ordem = async () => (await pagina.locator('.faixa .chip').allTextContents()).slice(1, -1);
+  const mover = async (rotulo) => {
+    await botao(pagina, 'Opções da lista').click();
+    await botao(pagina, rotulo).click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+
+  assert.deepEqual(await ordem(), ['Trabalho', 'Faculdade', 'Contas']);
+  await mover('Mover para a esquerda');
+  assert.deepEqual(await ordem(), ['Faculdade', 'Trabalho', 'Contas']);
+
+  // Na ponta, a opção daquele lado fica desativada.
+  await botao(pagina, 'Opções da lista').click();
+  assert.equal(await botao(pagina, 'Mover para a esquerda').isDisabled(), true);
+  await botao(pagina, 'Mover para a direita').click();
+  await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  await mover('Mover para a direita');
+  assert.deepEqual(await ordem(), ['Trabalho', 'Contas', 'Faculdade']);
+  await botao(pagina, 'Opções da lista').click();
+  assert.equal(await botao(pagina, 'Mover para a direita').isDisabled(), true);
+
+  assert.deepEqual(
+    JSON.parse(await lerSalvo(pagina, CHAVE)).listas.map((l) => l.nome),
+    ['Trabalho', 'Contas', 'Faculdade'],
+  );
   assert.deepEqual(erros, []);
 });
 

@@ -334,10 +334,28 @@ async function excluirConcluidas(lista) {
   redesenhar();
 }
 
+// A ordem das listas na faixa do topo é a ordem em que estão guardadas.
+function moverLista(lista, passo) {
+  const de = estado.listas.indexOf(lista);
+  const para = de + passo;
+  if (de < 0 || para < 0 || para >= estado.listas.length) return;
+  estado.listas.splice(de, 1);
+  estado.listas.splice(para, 0, lista);
+  salvar();
+  redesenhar();
+}
+
 function menuLista(lista) {
+  const posicao = estado.listas.indexOf(lista);
   abrirMenu(lista.nome, [
     { rotulo: `Ordenar por: ${ROTULO_DA_ORDEM[estado.ordemTarefas]}`, acao: escolherOrdem },
     { rotulo: 'Renomear lista', acao: () => editarLista(lista) },
+    { rotulo: 'Mover para a esquerda', desativado: posicao === 0, acao: () => moverLista(lista, -1) },
+    {
+      rotulo: 'Mover para a direita',
+      desativado: posicao === estado.listas.length - 1,
+      acao: () => moverLista(lista, 1),
+    },
     {
       rotulo: 'Excluir concluídas',
       perigo: true,
@@ -565,6 +583,8 @@ function render(raiz) {
     ...blocos,
   );
   faixa.scrollLeft = rolagemFaixa;
+  // A lista ativa fica sempre à vista na faixa (ela pode ter mudado de lugar).
+  faixa.querySelector('.chip.ativo')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 export const tarefas = {
