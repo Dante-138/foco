@@ -1,5 +1,5 @@
 // Como os itens de uma rotina aparecem na tela, e o que as ações em bloco mudam:
-// marcar ou desmarcar a seção inteira, desfazer e mover uma seção de lugar.
+// marcar ou desmarcar a seção inteira e desfazer.
 
 // Agrupa os itens em blocos: cada seção com os itens que vêm depois dela. Os itens
 // escritos antes da primeira seção formam um bloco sem seção (secao: null).
@@ -61,18 +61,4 @@ export function desmarcarBloco(marcas, bloco) {
 // quando a seção foi marcada de uma vez.
 export function semAsUltimas(marcas, quantas = 1) {
   return marcas.slice(0, Math.max(0, marcas.length - quantas));
-}
-
-// Itens da rotina com a seção de posição "de" (contando só as seções, a partir de zero)
-// levada para a posição "para". O bloco inteiro vai junto. Os itens escritos antes da
-// primeira seção ficam onde estão. Posição inválida devolve a lista como veio.
-export function moverSecao(itens, de, para) {
-  const blocos = emBlocos(itens);
-  const soltos = blocos[0]?.secao === null ? blocos.shift().itens : [];
-  const valida = (posicao) => Number.isInteger(posicao) && posicao >= 0 && posicao < blocos.length;
-  if (!valida(de) || !valida(para) || de === para) return itens;
-
-  const [movido] = blocos.splice(de, 1);
-  blocos.splice(para, 0, movido);
-  return [...soltos, ...blocos.flatMap((bloco) => [bloco.secao, ...bloco.itens])];
 }
