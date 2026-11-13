@@ -143,9 +143,11 @@ tools/                  servidor de desenvolvimento e portão de commits
 - Dados gravados por uma versão mais nova do app nunca são sobrescritos: o app avisa e não abre.
 - A interface não usa HTML em texto. O DOM é montado elemento por elemento, o lint proíbe
   `innerHTML` e a página exige Trusted Types.
-- O app Android pede duas permissões: vibrar (resposta ao toque) e notificações (lembretes das
-  tarefas). Os lembretes são agendados no próprio aparelho, sem servidor, e como alarmes não
-  exatos: podem atrasar alguns minutos, e o app não usa a permissão de alarme exato.
+- Permissões do app Android: notificações (a única que o Android pergunta, para os lembretes das
+  tarefas), vibrar (resposta ao toque), iniciar com o aparelho e manter o processador acordado
+  (o plugin reagenda os lembretes depois de reiniciar) e internet (vem da casca do Capacitor; a
+  página não faz conexões). Os lembretes são agendados no próprio aparelho, sem servidor, e como
+  alarmes não exatos: podem atrasar alguns minutos, e a permissão de alarme exato é retirada.
 
 ## Próximos passos
 
