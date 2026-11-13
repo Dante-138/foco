@@ -5,6 +5,7 @@ import {
   emAreas,
   emBlocos,
   marcarBloco,
+  moverSecao,
   semAsUltimas,
 } from '../../www/js/nucleo/rotina-ordem.js';
 
@@ -97,4 +98,50 @@ test('desfazer tira a última marca, ou o lote inteiro, sem passar do começo', 
   assert.deepEqual(semAsUltimas(marcas, 9), []);
   assert.deepEqual(semAsUltimas([], 1), []);
   assert.deepEqual(marcas, ['a', 'c', 'b']);
+});
+
+test('mover seção leva o bloco inteiro e deixa no lugar os itens antes da primeira seção', () => {
+  assert.deepEqual(ids(moverSecao(ROTINA, 0, 2)), [
+    'solto1',
+    'solto2',
+    'VAZIA',
+    'NOITE',
+    'd',
+    'MANHÃ',
+    'a',
+    'b',
+    'c',
+  ]);
+  assert.deepEqual(ids(moverSecao(ROTINA, 2, 0)), [
+    'solto1',
+    'solto2',
+    'NOITE',
+    'd',
+    'MANHÃ',
+    'a',
+    'b',
+    'c',
+    'VAZIA',
+  ]);
+  assert.deepEqual(ids(moverSecao([secao('A'), item('1'), secao('B'), item('2')], 1, 0)), [
+    'B',
+    '2',
+    'A',
+    '1',
+  ]);
+});
+
+test('mover seção com posição inválida, ou para o mesmo lugar, devolve a lista como veio', () => {
+  for (const [de, para] of [
+    [0, 0],
+    [-1, 1],
+    [0, 3],
+    [3, 0],
+    [0.5, 1],
+    [undefined, 1],
+  ]) {
+    assert.equal(moverSecao(ROTINA, de, para), ROTINA);
+  }
+  const semSecao = [item('x'), item('y')];
+  assert.equal(moverSecao(semSecao, 0, 1), semSecao);
 });

@@ -28,3 +28,13 @@ export function limparVazios(itens, limiteDoTexto) {
     .map((item) => ({ ...item, texto: item.texto.trim().slice(0, limiteDoTexto).trim() }))
     .filter((item) => item.texto);
 }
+
+// Itens na ordem dos ids recebidos (a ordem em que ficaram na tela depois de arrastar).
+// Id desconhecido é ignorado, e item que não está na lista de ids vai para o fim:
+// nenhum item se perde por causa de um arraste.
+export function naOrdem(itens, ids) {
+  const porId = new Map(itens.map((item) => [item.id, item]));
+  const ordenados = ids.map((id) => porId.get(id)).filter(Boolean);
+  const vistos = new Set(ordenados);
+  return [...ordenados, ...itens.filter((item) => !vistos.has(item))];
+}
