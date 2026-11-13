@@ -8,16 +8,25 @@ rotinas do dia, hábitos e tarefas com prazo.
 ## O que tem hoje
 
 - **Rotinas**: checklists do dia com seções e horários. As marcas zeram sozinhas no dia seguinte.
+  O item marcado desce para o fim da seção, e um botão desfaz a última marca. Um item pode ser
+  ligado a um hábito: marcar o item marca o hábito no dia.
 - **Hábitos**: grade com um hábito por linha e um dia por coluna (feito, não feito, pulado),
-  além de hábitos numéricos com meta diária.
-- **Tarefas**: listas com prazo, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data.
+  além de hábitos numéricos com meta diária. O anel mostra a pontuação do hábito, e a edição
+  mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados.
+- **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
+  ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
+  semanas, meses ou anos.
+- **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
+  às 9h quando só tem a data.
+- **Gestos**: deslizar o dedo para o lado troca de aba.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
 - **Backup**: em Ajustes, copiar todos os dados como texto e restaurar colando esse texto.
   O app confere o que foi colado e pede confirmação antes de substituir.
 
 ## Como rodar
 
-Requer Node.js 22.8 ou mais novo. O app em si não tem dependências nem etapa de build.
+Requer Node.js 22.8 ou mais novo. No navegador o app não tem dependências nem etapa de build;
+o app Android usa o Capacitor e o plugin de notificações locais dele.
 
 ```bash
 node tools/serve.mjs
@@ -35,7 +44,7 @@ Depois acesse `http://localhost:8137` no Chrome do celular.
 
 ## Desenvolvimento
 
-As dependências são só de desenvolvimento (ESLint, Prettier e playwright-core). Os testes usam
+Fora o Capacitor, as dependências são só de desenvolvimento (ESLint, Prettier e playwright-core). Os testes usam
 o executor nativo do Node; os de ponta a ponta abrem o Google Chrome instalado na máquina.
 
 ```bash
@@ -100,8 +109,13 @@ www/js/nucleo/          lógica pura: roda sem navegador, não toca DOM nem arma
   backup.js             conferência do texto de backup antes de restaurar
   migracao.js           atualização de dados de versões anteriores
   rotina-texto.js       conversão entre o texto do editor e os itens da rotina
+  rotina-ordem.js       ordem de exibição dos itens (marcados no fim) e o desfazer
+  ligacao.js            item de rotina ligado a hábito
   prazos.js             ordenação e agrupamento das tarefas por prazo
-  habito-calculo.js     leitura de números, metas e taxa de cumprimento
+  repeticao.js          tarefas que se repetem: próxima data
+  lembretes.js          plano de notificações das tarefas com prazo
+  habito-calculo.js     leitura de números, metas, pontuação, sequências e filtros
+  gesto.js              deslize do dedo para trocar de aba
   datas.js              datas no fuso local
   paleta.js             cores dos hábitos
   ids.js                identificadores
@@ -111,6 +125,7 @@ www/js/                 interface: monta o DOM e chama o núcleo
   store.js              único módulo de dados que acessa o armazenamento
   ui.js                 elementos, ícones e folhas
   rotinas.js, habitos.js, tarefas.js
+  lembretes.js          agenda as notificações pelo plugin do Capacitor
   ajustes.js, tema.js, tema-inicial.js
 
 tests/unidade/          testes do núcleo e das ferramentas (node --test)
@@ -128,6 +143,9 @@ tools/                  servidor de desenvolvimento e portão de commits
 - Dados gravados por uma versão mais nova do app nunca são sobrescritos: o app avisa e não abre.
 - A interface não usa HTML em texto. O DOM é montado elemento por elemento, o lint proíbe
   `innerHTML` e a página exige Trusted Types.
+- O app Android pede duas permissões: vibrar (resposta ao toque) e notificações (lembretes das
+  tarefas). Os lembretes são agendados no próprio aparelho, sem servidor, e como alarmes não
+  exatos: podem atrasar alguns minutos, e o app não usa a permissão de alarme exato.
 
 ## Próximos passos
 
