@@ -244,10 +244,27 @@ function escolherOrdem() {
   );
 }
 
+async function excluirConcluidas(lista) {
+  const daLista = (t) => t.listaId === lista.id && t.feita;
+  const quantas = estado.tarefas.filter(daLista).length;
+  const quais = quantas === 1 ? 'a tarefa concluída' : `as ${quantas} tarefas concluídas`;
+  if (!(await confirmar(`Excluir ${quais} da lista "${lista.nome}"?`))) return;
+
+  estado.tarefas = estado.tarefas.filter((t) => !daLista(t));
+  salvar();
+  redesenhar();
+}
+
 function menuLista(lista) {
   abrirMenu(lista.nome, [
     { rotulo: `Ordenar por: ${ROTULO_DA_ORDEM[estado.ordemTarefas]}`, acao: escolherOrdem },
     { rotulo: 'Renomear lista', acao: () => editarLista(lista) },
+    {
+      rotulo: 'Excluir concluídas',
+      perigo: true,
+      desativado: !estado.tarefas.some((t) => t.listaId === lista.id && t.feita),
+      acao: () => excluirConcluidas(lista),
+    },
     {
       rotulo: 'Excluir lista',
       perigo: true,

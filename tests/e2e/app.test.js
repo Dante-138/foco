@@ -432,6 +432,55 @@ test('tarefas: lista só com concluídas mostra a mensagem no alto, com folga at
   assert.deepEqual(erros, []);
 });
 
+test('tarefas: excluir concluídas apaga só as concluídas da lista, depois de confirmar', async (t) => {
+  const tarefa = (id, listaId, titulo, feita) => ({
+    id,
+    listaId,
+    titulo,
+    notas: '',
+    prazo: null,
+    estrela: false,
+    feita,
+    criadaEm: 1,
+    feitaEm: feita ? 2 : null,
+  });
+  const salvo = JSON.stringify({
+    versao: 3,
+    aba: 'tarefas',
+    listas: [
+      { id: 'a', nome: 'Faculdade' },
+      { id: 'b', nome: 'Pessoal' },
+    ],
+    listaAtiva: 'a',
+    tarefas: [
+      tarefa('1', 'a', 'Pendente da faculdade', false),
+      tarefa('2', 'a', 'Feita da faculdade', true),
+      tarefa('3', 'a', 'Outra feita da faculdade', true),
+      tarefa('4', 'b', 'Feita pessoal', true),
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const titulosSalvos = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas.map((x) => x.titulo);
+
+  // Cancelar não apaga nada.
+  await botao(pagina, 'Opções da lista').click();
+  await botao(pagina, 'Excluir concluídas').click();
+  await visivel(pagina.getByText('Excluir as 2 tarefas concluídas da lista "Faculdade"?'));
+  await botao(pagina, 'Cancelar').click();
+  await visivel(botao(pagina, 'Concluídas (2)'));
+
+  await botao(pagina, 'Opções da lista').click();
+  await botao(pagina, 'Excluir concluídas').click();
+  await botao(pagina, 'Excluir').click();
+  await pagina.waitForFunction(() => !document.querySelector('.concluidas-topo'), null, ESPERA);
+  assert.deepEqual(await titulosSalvos(), ['Pendente da faculdade', 'Feita pessoal']);
+
+  // Sem concluídas na lista, a opção fica desativada.
+  await botao(pagina, 'Opções da lista').click();
+  assert.equal(await botao(pagina, 'Excluir concluídas').isDisabled(), true);
+  assert.deepEqual(erros, []);
+});
+
 test('tarefa: cria com prazo de hoje, marca estrela, conclui e reabre', async (t) => {
   const { pagina, erros } = await abrir(t);
 
