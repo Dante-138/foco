@@ -307,6 +307,35 @@ test('rotina: editar na própria lista mantém a marca e a ligação; Enter cria
   assert.deepEqual(erros, []);
 });
 
+test('rotina: o que foi digitado na edição é gravado na hora em que o app vai para o fundo', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 5,
+    rotinas: [{ id: 'r', nome: 'Manhã', itens: [{ id: 'i1', tipo: 'item', texto: 'Levantar' }] }],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  await botao(pagina, 'Editar itens').click();
+  const campo = pagina.locator('.edicao .campo-texto').first();
+
+  // App para o fundo (a aba deixa de ser visível): grava antes da espera de meio segundo.
+  await campo.fill('Levantar cedo');
+  const aoEsconder = await pagina.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    delete document.hidden;
+    return JSON.parse(localStorage.getItem('foco:v1')).rotinas[0].itens[0].texto;
+  });
+  assert.equal(aoEsconder, 'Levantar cedo');
+
+  // Página saindo (pagehide): mesma coisa.
+  await campo.fill('Levantar às 6');
+  const aoSair = await pagina.evaluate(() => {
+    window.dispatchEvent(new Event('pagehide'));
+    return JSON.parse(localStorage.getItem('foco:v1')).rotinas[0].itens[0].texto;
+  });
+  assert.equal(aoSair, 'Levantar às 6');
+  assert.deepEqual(erros, []);
+});
+
 test('rotina ligada a hábito: marcar o item marca o hábito; desfazer e desmarcar tudo desfazem', async (t) => {
   const habito = (id, nome, extra) => ({
     id,
