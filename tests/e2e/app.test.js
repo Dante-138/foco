@@ -521,6 +521,54 @@ test('tarefas: lista só com concluídas mostra a mensagem no alto, com folga at
   assert.deepEqual(erros, []);
 });
 
+test('tarefa com horário: aparece na linha, ordena o dia pelo relógio e vale para hoje se faltar a data', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const criar = async (titulo, { hoje = false, hora } = {}) => {
+    await botao(pagina, 'Nova tarefa').click();
+    await pagina.getByLabel('Título').fill(titulo);
+    if (hoje) await botao(pagina, 'Hoje').click();
+    if (hora) await pagina.locator('dialog[open] input[type=time]').fill(hora);
+    await botao(pagina, 'Salvar').click();
+    await visivel(pagina.getByText(titulo));
+  };
+
+  await botao(pagina, 'Tarefas').click();
+  await criar('Sem horário', { hoje: true });
+  await criar('Reunião da tarde', { hoje: true, hora: '14:30' });
+  await criar('Café da manhã', { hora: '07:15' }); // só o horário: a data vira hoje
+
+  await visivel(pagina.getByRole('heading', { name: 'Hoje', exact: true }));
+  assert.equal(await pagina.getByRole('heading', { name: 'Sem data' }).count(), 0);
+  assert.deepEqual(await pagina.locator('.tarefa-titulo').allTextContents(), [
+    'Café da manhã',
+    'Reunião da tarde',
+    'Sem horário',
+  ]);
+  await visivel(pagina.getByText('07:15', { exact: true }));
+  await visivel(pagina.getByText('14:30', { exact: true }));
+
+  const salvas = JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas;
+  assert.deepEqual(
+    salvas.map((x) => [x.titulo, x.hora, x.prazo === salvas[0].prazo]),
+    [
+      ['Sem horário', null, true],
+      ['Reunião da tarde', '14:30', true],
+      ['Café da manhã', '07:15', true],
+    ],
+  );
+
+  // "Sem data" na edição tira também o horário.
+  await pagina.locator('.tarefa-corpo', { hasText: 'Reunião da tarde' }).click();
+  await botao(pagina, 'Sem data').click();
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
+  const reuniao = JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas.find(
+    (x) => x.titulo === 'Reunião da tarde',
+  );
+  assert.deepEqual([reuniao.prazo, reuniao.hora], [null, null]);
+  assert.deepEqual(erros, []);
+});
+
 test('tarefas: excluir concluídas apaga só as concluídas da lista, depois de confirmar', async (t) => {
   const tarefa = (id, listaId, titulo, feita) => ({
     id,

@@ -60,6 +60,7 @@ function valido() {
         titulo: 'Prova',
         notas: 'Capítulos 1 a 3',
         prazo: '2026-11-26',
+        hora: '19:30',
         estrela: true,
         feita: false,
         criadaEm: 1000,
@@ -71,6 +72,7 @@ function valido() {
         titulo: 'Mercado',
         notas: '',
         prazo: null,
+        hora: null,
         estrela: false,
         feita: true,
         criadaEm: 2000,
@@ -356,6 +358,7 @@ test('tarefa: cada campo inválido recebe um valor seguro', () => {
         titulo: 42,
         notas: { a: 1 },
         prazo: '2026-13-01',
+        hora: '19:30',
         estrela: 'sim',
         feita: 1,
         criadaEm: 'ontem',
@@ -370,6 +373,7 @@ test('tarefa: cada campo inválido recebe um valor seguro', () => {
       titulo: 'Sem título',
       notas: '',
       prazo: null,
+      hora: null,
       estrela: false,
       feita: false,
       criadaEm: 0,
@@ -458,4 +462,28 @@ test('marcados no fim: só o valor falso desliga; qualquer outro vale o padrão,
     assert.equal(limpar({ marcadosNoFim: valor }).estado.marcadosNoFim, true);
   }
   assert.equal(limpar({ marcadosNoFim: false }).estado.marcadosNoFim, false);
+});
+
+test('tarefa: horário só vale no formato HH:MM e junto de um prazo', () => {
+  const tarefa = (id, prazo, hora) => ({ id, listaId: 'l1', titulo: id, prazo, hora });
+  const { estado } = limpar({
+    listas: [{ id: 'l1', nome: 'L' }],
+    tarefas: [
+      tarefa('com-os-dois', '2026-11-26', '07:05'),
+      tarefa('hora-invalida', '2026-11-26', '25:00'),
+      tarefa('hora-que-nao-e-texto', '2026-11-26', 730),
+      tarefa('sem-prazo', null, '07:05'),
+      tarefa('sem-hora', '2026-11-26', undefined),
+    ],
+  });
+  assert.deepEqual(
+    estado.tarefas.map((t) => [t.id, t.prazo, t.hora]),
+    [
+      ['com-os-dois', '2026-11-26', '07:05'],
+      ['hora-invalida', '2026-11-26', null],
+      ['hora-que-nao-e-texto', '2026-11-26', null],
+      ['sem-prazo', null, null],
+      ['sem-hora', '2026-11-26', null],
+    ],
+  );
 });

@@ -74,6 +74,44 @@ test('porPrazo coloca tarefa com prazo antes de tarefa sem data', () => {
   assert.ok(porPrazo(semPrazo, comPrazo) > 0);
 });
 
+test('porPrazo, no mesmo dia: com horário antes, na ordem do relógio; sem horário depois', () => {
+  const dia = '2026-11-20';
+  const lista = [
+    { titulo: 'sem horário, mais antiga', prazo: dia, hora: null, criadaEm: 1 },
+    { titulo: 'tarde', prazo: dia, hora: '14:30', criadaEm: 2 },
+    { titulo: 'manhã', prazo: dia, hora: '07:15', criadaEm: 3 },
+    { titulo: 'sem horário, mais nova', prazo: dia, hora: null, criadaEm: 4 },
+    { titulo: 'tarde, criada depois', prazo: dia, hora: '14:30', criadaEm: 5 },
+    { titulo: 'véspera à noite', prazo: '2026-11-19', hora: '23:00', criadaEm: 6 },
+  ];
+  assert.deepEqual(
+    [...lista].sort(porPrazo).map((t) => t.titulo),
+    [
+      'véspera à noite',
+      'manhã',
+      'tarde',
+      'tarde, criada depois',
+      'sem horário, mais antiga',
+      'sem horário, mais nova',
+    ],
+  );
+  // a ordem não depende da posição de partida
+  assert.deepEqual(
+    [...lista]
+      .reverse()
+      .sort(porPrazo)
+      .map((t) => t.titulo),
+    [
+      'véspera à noite',
+      'manhã',
+      'tarde',
+      'tarde, criada depois',
+      'sem horário, mais antiga',
+      'sem horário, mais nova',
+    ],
+  );
+});
+
 test('rotuloData mostra dia da semana no ano corrente e o ano quando é outro', () => {
   assert.match(rotuloData('2026-11-13', HOJE), /sex.*13 de nov/);
   assert.doesNotMatch(rotuloData('2026-11-13', HOJE), /2026/);

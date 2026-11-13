@@ -20,6 +20,7 @@
 //   listas:       [{ id, nome }]   (sempre pelo menos uma)
 //   listaAtiva:   id de uma lista existente | 'estrela'
 //   tarefas:      [{ id, listaId, titulo, notas, prazo: 'AAAA-MM-DD' | null,
+//                    hora: 'HH:MM' | null (só existe com prazo),
 //                    estrela, feita, criadaEm, feitaEm: número | null }]
 //   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
 // }
@@ -140,12 +141,14 @@ function sanearTarefas(valor, listas, avisos) {
     if (!idsDeLista.has(tarefa.listaId)) avisos.push('tarefa de lista inexistente, movida para a primeira');
     const feita = tarefa.feita === true;
     const criadaEm = numeroValido(tarefa.criadaEm) ? tarefa.criadaEm : 0;
+    const prazo = dataValida(tarefa.prazo) ? tarefa.prazo : null;
     return {
       id: tarefa.id,
       listaId: idsDeLista.has(tarefa.listaId) ? tarefa.listaId : listas[0].id,
       titulo: cortar(tarefa.titulo, LIMITES.tituloTarefa) || 'Sem título',
       notas: cortar(tarefa.notas, LIMITES.notasTarefa),
-      prazo: dataValida(tarefa.prazo) ? tarefa.prazo : null,
+      prazo,
+      hora: prazo && horaValida(tarefa.hora) ? tarefa.hora : null, // horário sem data não existe
       estrela: tarefa.estrela === true,
       feita,
       criadaEm,

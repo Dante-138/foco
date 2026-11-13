@@ -11,9 +11,17 @@ export function rotuloData(iso, dia) {
   return data.getFullYear() === deIso(dia).getFullYear() ? fmtCurta.format(data) : fmtComAno.format(data);
 }
 
+// No mesmo dia: as com horário primeiro, na ordem do relógio; depois as sem horário.
+function porHora(a, b) {
+  if (a.hora && b.hora) return a.hora.localeCompare(b.hora);
+  if (a.hora) return -1;
+  if (b.hora) return 1;
+  return 0;
+}
+
 // Ordem: com prazo primeiro (mais próximo no topo), depois as sem data.
 export function porPrazo(a, b) {
-  if (a.prazo && b.prazo) return a.prazo.localeCompare(b.prazo) || a.criadaEm - b.criadaEm;
+  if (a.prazo && b.prazo) return a.prazo.localeCompare(b.prazo) || porHora(a, b) || a.criadaEm - b.criadaEm;
   if (a.prazo) return -1;
   if (b.prazo) return 1;
   return a.criadaEm - b.criadaEm;

@@ -69,6 +69,7 @@ function editarTarefa(tarefa) {
     maxLength: LIMITES.notasTarefa,
   });
   const prazo = h('input', { class: 'entrada', type: 'date', value: tarefa?.prazo ?? '' });
+  const hora = h('input', { class: 'entrada', type: 'time', value: tarefa?.hora ?? '' });
   const lista = h(
     'select',
     { class: 'entrada' },
@@ -84,6 +85,7 @@ function editarTarefa(tarefa) {
         class: 'chip',
         onclick: () => {
           prazo.value = valor;
+          if (!valor) hora.value = ''; // sem data não há horário
         },
       },
       rotulo,
@@ -101,7 +103,9 @@ function editarTarefa(tarefa) {
     const dados = {
       titulo: tituloFinal,
       notas: notas.value.trim(),
-      prazo: prazo.value || null,
+      // Horário sem data vale para hoje, como no Google Tasks.
+      prazo: prazo.value || (hora.value ? hoje() : null),
+      hora: hora.value || null,
       // Sem opção selecionada (lista da tarefa não existe mais), cai na primeira lista.
       listaId: lista.value || estado.listas[0].id,
     };
@@ -137,7 +141,7 @@ function editarTarefa(tarefa) {
       { class: 'folha-form', onsubmit: aoSalvar },
       campo('Título', titulo),
       campo('Detalhes', notas),
-      campo('Prazo', prazo),
+      h('div', { class: 'dupla' }, campo('Prazo', prazo), campo('Horário', hora)),
       h(
         'div',
         { class: 'atalhos' },
@@ -279,13 +283,12 @@ function menuLista(lista) {
 // comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
 function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
   const detalhes = [];
-  if (atrasada || tarefa.feita || comPrazo) {
-    if (tarefa.prazo) {
-      detalhes.push(
-        h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, rotuloData(tarefa.prazo, hoje())),
-      );
-    }
-  }
+  // Data e horário em uma linha só: "sex., 13 de nov., 14:30", só "14:30" quando o grupo já diz o dia.
+  const mostrarData = Boolean(tarefa.prazo) && (atrasada || tarefa.feita || comPrazo);
+  const quando = [mostrarData ? rotuloData(tarefa.prazo, hoje()) : null, tarefa.hora]
+    .filter(Boolean)
+    .join(', ');
+  if (quando) detalhes.push(h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, quando));
   if (mostrarLista) {
     const nomeLista = estado.listas.find((l) => l.id === tarefa.listaId)?.nome;
     if (nomeLista) detalhes.push(h('span', { class: 'tarefa-sub' }, nomeLista));

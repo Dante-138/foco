@@ -32,8 +32,9 @@ function v1ParaV2(dados) {
 // para uma versão antiga do app não abrir estes dados e apagar, ao gravar, os
 // campos que ela não conhece.
 
-// A v4 acrescenta, nas rotinas, a opção de mandar os itens marcados para o fim.
-// Como na v3, não há o que converter: o campo novo nasce com o valor padrão na validação.
+// A v4 acrescenta, nas rotinas, a opção de mandar os itens marcados para o fim e, nas
+// tarefas, o horário. Como na v3, não há o que converter: os campos novos nascem com o
+// valor padrão na validação.
 
 // Cada passo sobe uma versão. Altera e devolve o próprio objeto.
 // Quem chama garante que dados.versao é um inteiro entre 1 e VERSAO.

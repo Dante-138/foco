@@ -28,6 +28,7 @@ function comDados() {
         titulo: 'Prova',
         notas: '',
         prazo: '2026-11-26',
+        hora: '08:00',
         estrela: false,
         feita: false,
         criadaEm: 1,
