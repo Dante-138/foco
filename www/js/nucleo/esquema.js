@@ -9,7 +9,9 @@
 //   aba:          'rotinas' | 'habitos' | 'tarefas'
 //   rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null }] }]
 //   rotinaAtiva:  id de uma rotina existente | null
-//   marcasRotina: { data: 'AAAA-MM-DD', porRotina: { rotinaId: [itemId] } }   (só o dia corrente)
+//   marcasRotina: { data: 'AAAA-MM-DD', porRotina: { rotinaId: [itemId] } }   (só o dia corrente;
+//                 os ids ficam na ordem em que os itens foram marcados)
+//   marcadosNoFim: verdadeiro mostra os itens marcados no fim da seção deles (padrão: verdadeiro)
 //   habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade: texto | null, meta: número | null,
 //                    arquivado }]
 //   registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número >= 0 } }
@@ -186,6 +188,7 @@ export function sanear(dados, { dia, gerarId }) {
       ? dados.rotinaAtiva
       : (rotinas[0]?.id ?? null),
     marcasRotina: sanearMarcas(dados.marcasRotina, rotinas, dia),
+    marcadosNoFim: dados.marcadosNoFim !== false,
     habitos,
     registros: sanearRegistros(dados.registros, habitos, avisos),
     ocultarConcluidos: dados.ocultarConcluidos === true,

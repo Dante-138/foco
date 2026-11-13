@@ -17,6 +17,7 @@ export function estadoInicial({ dia, gerarId }) {
     rotinas: [],
     rotinaAtiva: null,
     marcasRotina: { data: dia, porRotina: {} },
+    marcadosNoFim: true,
     habitos: [],
     registros: {},
     ocultarConcluidos: false,

@@ -63,7 +63,9 @@ test('a migração termina sempre na versão atual e devolve o mesmo objeto', ()
   assert.equal(dados.versao, VERSAO);
 });
 
-test('v2 -> v3 só sobe o número: os campos novos nascem na validação', () => {
-  const dados = migrar({ versao: 2, habitos: [{ id: 'a', cor: 'rosa' }], tarefas: [] });
-  assert.deepEqual(dados, { versao: 3, habitos: [{ id: 'a', cor: 'rosa' }], tarefas: [] });
+test('da v2 em diante a migração só sobe o número: os campos novos nascem na validação', () => {
+  for (const versao of [2, 3]) {
+    const dados = migrar({ versao, habitos: [{ id: 'a', cor: 'rosa' }], tarefas: [] });
+    assert.deepEqual(dados, { versao: VERSAO, habitos: [{ id: 'a', cor: 'rosa' }], tarefas: [] });
+  }
 });

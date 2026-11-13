@@ -139,7 +139,7 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
 
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 3);
+  assert.equal(salvo.versao, 4);
   assert.deepEqual(
     salvo.rotinas[0].itens.map((i) => [i.tipo, i.hora, i.texto]),
     [
@@ -162,6 +162,53 @@ test('rotina: sair da edição com texto alterado pede confirmação', async (t)
   await botao(pagina, 'Descartar').click();
   await visivel(pagina.getByText('Nenhuma rotina ainda'));
   assert.equal(await pagina.locator('dialog').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
+test('rotina: item marcado desce para o fim da seção, e o desfazer volta uma marca por vez', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const ordem = () => pagina.locator('.rotina-item .rotina-texto').allTextContents();
+  const desfazer = botao(pagina, 'Desfazer a última marca');
+
+  await botao(pagina, 'Nova rotina').click();
+  await pagina.getByLabel('Nome').fill('Manhã');
+  await pagina
+    .getByLabel('Itens')
+    .fill('# ACORDAR\nLevantar\nBeber água\nArrumar a cama\n# SAIR\nPegar a chave');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  assert.equal(await desfazer.isDisabled(), true);
+
+  // Marcados vão para o fim da própria seção, na ordem em que estão escritos.
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.deepEqual(await ordem(), ['Beber água', 'Arrumar a cama', 'Levantar', 'Pegar a chave']);
+  await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).click();
+  await pagina.getByRole('checkbox', { name: /Beber água/ }).click();
+  await visivel(pagina.getByText('3 de 4 hoje'));
+  assert.deepEqual(await ordem(), ['Arrumar a cama', 'Levantar', 'Beber água', 'Pegar a chave']);
+
+  // Desfazer volta a última marca (Beber água), depois a anterior (Pegar a chave).
+  await desfazer.click();
+  await visivel(pagina.getByText('2 de 4 hoje'));
+  assert.equal(
+    await pagina.getByRole('checkbox', { name: /Beber água/ }).getAttribute('aria-checked'),
+    'false',
+  );
+  await desfazer.click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.equal(
+    await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).getAttribute('aria-checked'),
+    'false',
+  );
+  assert.equal(await pagina.getByRole('checkbox', { name: /Levantar/ }).getAttribute('aria-checked'), 'true');
+
+  // Com a opção desligada, os itens ficam onde foram escritos.
+  await botao(pagina, 'Opções da rotina').click();
+  await pagina.getByRole('switch', { name: 'Marcados no fim' }).click();
+  await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  assert.deepEqual(await ordem(), ['Levantar', 'Beber água', 'Arrumar a cama', 'Pegar a chave']);
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).marcadosNoFim, false);
   assert.deepEqual(erros, []);
 });
 

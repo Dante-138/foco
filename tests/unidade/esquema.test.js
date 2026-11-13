@@ -32,6 +32,7 @@ function valido() {
     ],
     rotinaAtiva: 'r1',
     marcasRotina: { data: HOJE, porRotina: { r1: ['i2'] } },
+    marcadosNoFim: false,
     habitos: [
       {
         id: 'h1',
@@ -101,6 +102,7 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     rotinas: [],
     rotinaAtiva: null,
     marcasRotina: { data: HOJE, porRotina: {} },
+    marcadosNoFim: true,
     habitos: [],
     registros: {},
     ocultarConcluidos: false,
@@ -449,4 +451,11 @@ test('filtros dos hábitos e ordem das tarefas: valor inválido volta ao padrão
     [estado.ocultarConcluidos, estado.ocultarArquivados, estado.ordemTarefas],
     [true, false, 'criacao'],
   );
+});
+
+test('marcados no fim: só o valor falso desliga; qualquer outro vale o padrão, ligado', () => {
+  for (const valor of [undefined, null, 0, 'false', {}, true]) {
+    assert.equal(limpar({ marcadosNoFim: valor }).estado.marcadosNoFim, true);
+  }
+  assert.equal(limpar({ marcadosNoFim: false }).estado.marcadosNoFim, false);
 });

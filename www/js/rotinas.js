@@ -5,7 +5,8 @@ import { estado, salvar, marcasDeHoje } from './store.js';
 import { uid } from './nucleo/ids.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { textoParaItens, itensParaTexto } from './nucleo/rotina-texto.js';
-import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
+import { emOrdemDeExibicao, semAUltimaMarca } from './nucleo/rotina-ordem.js';
+import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
 
 // ---------------------------------------------------------------- ações
 
@@ -14,7 +15,16 @@ function alternarItem(rotina, item) {
   const atuais = new Set(marcas[rotina.id] ?? []);
   if (atuais.has(item.id)) atuais.delete(item.id);
   else atuais.add(item.id);
-  marcas[rotina.id] = [...atuais];
+  marcas[rotina.id] = [...atuais]; // a ordem da lista é a ordem em que os itens foram marcados
+  vibrar('toque');
+  salvar();
+  redesenhar();
+}
+
+// Desfazer: desmarca o último item marcado. Tocar de novo volta mais um, e assim por diante.
+function desfazerUltimaMarca(rotina) {
+  const marcas = marcasDeHoje();
+  marcas[rotina.id] = semAUltimaMarca(marcas[rotina.id] ?? []);
   salvar();
   redesenhar();
 }
@@ -113,6 +123,15 @@ function menuRotina(rotina) {
   abrirMenu(rotina.nome, [
     { rotulo: 'Editar rotina', acao: () => editarRotina(rotina) },
     {
+      rotulo: 'Marcados no fim',
+      marcado: estado.marcadosNoFim,
+      acao: () => {
+        estado.marcadosNoFim = !estado.marcadosNoFim;
+        salvar();
+        redesenhar();
+      },
+    },
+    {
       rotulo: 'Desmarcar tudo',
       acao: () => {
         delete marcasDeHoje()[rotina.id];
@@ -204,6 +223,17 @@ function render(raiz) {
         {
           type: 'button',
           class: 'botao-icone',
+          'aria-label': 'Desfazer a última marca',
+          disabled: feitos === 0,
+          onclick: () => desfazerUltimaMarca(ativa),
+        },
+        icone('desfazer'),
+      ),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'botao-icone',
           'aria-label': 'Opções da rotina',
           onclick: () => menuRotina(ativa),
         },
@@ -219,7 +249,9 @@ function render(raiz) {
       ? h(
           'ul',
           { class: 'cartao' },
-          ativa.itens.map((item) => linha(ativa, item, marcadas, comHoras)),
+          emOrdemDeExibicao(ativa.itens, marcadas, estado.marcadosNoFim).map((item) =>
+            linha(ativa, item, marcadas, comHoras),
+          ),
         )
       : estadoVazio('Rotina vazia', 'Abra o menu e toque em Editar rotina.'),
   );

@@ -56,6 +56,10 @@ const ICONES = {
   cima: [['path', { d: 'M6 14.5l6-6 6 6' }]],
   baixo: [['path', { d: 'M6 9.5l6 6 6-6' }]],
   filtro: [['path', { d: 'M4 7h16M7 12h10M10 17h4' }]],
+  desfazer: [
+    ['path', { d: 'M9 6.5l-5 5 5 5' }],
+    ['path', { d: 'M4 11.5h10a4.5 4.5 0 0 1 0 9h-3' }],
+  ],
   ajustes: [
     ['path', { d: 'M4 7h8M18 7h2M4 17h2M12 17h8' }],
     ['circle', { cx: 15, cy: 7, r: 2.5 }],
