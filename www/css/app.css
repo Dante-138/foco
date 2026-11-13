@@ -119,6 +119,7 @@ body {
     sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  overflow: hidden; /* quem rola é #conteudo; a animação de troca de aba não cria rolagem lateral */
 }
 
 button {
@@ -185,6 +186,40 @@ ul {
   min-height: 0;
   overflow-y: auto;
   padding-bottom: 96px; /* a última linha rola para cima do botão + */
+  /* O navegador cuida só da rolagem vertical; o movimento para o lado fica para o
+     código, que troca de aba (js/app.js). Sem isto, o Chrome trata o dedo indo para
+     a direita como "voltar página". */
+  touch-action: pan-y;
+}
+
+/* Troca de aba: o conteúdo novo entra do lado para onde a pessoa foi. */
+#conteudo.entra-da-direita {
+  animation: entrar-da-direita 0.16s ease-out;
+}
+
+#conteudo.entra-da-esquerda {
+  animation: entrar-da-esquerda 0.16s ease-out;
+}
+
+@keyframes entrar-da-direita {
+  from {
+    transform: translateX(28px);
+    opacity: 0;
+  }
+}
+
+@keyframes entrar-da-esquerda {
+  from {
+    transform: translateX(-28px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #conteudo.entra-da-direita,
+  #conteudo.entra-da-esquerda {
+    animation: none;
+  }
 }
 
 .abas {
@@ -255,6 +290,7 @@ ul {
   padding: 4px 12px 10px;
   background: var(--fundo);
   scrollbar-width: none;
+  touch-action: pan-x pan-y; /* a faixa rola para os lados; o resto do conteúdo, não */
 }
 
 .faixa::-webkit-scrollbar {

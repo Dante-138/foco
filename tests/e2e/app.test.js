@@ -29,13 +29,15 @@ after(async () => {
 });
 
 // Abre o app em um contexto isolado. "salvo" é o texto gravado no
-// armazenamento antes de o app carregar (undefined = nada salvo).
-async function abrir(t, { salvo, esquemaDeCor = 'dark' } = {}) {
+// armazenamento antes de o app carregar (undefined = nada salvo). "toque" liga a
+// tela de toque no navegador, para os testes de gesto.
+async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false } = {}) {
   const contexto = await navegador.newContext({
     viewport: { width: 500, height: 1000 },
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     colorScheme: esquemaDeCor,
+    hasTouch: toque,
   });
   t.after(() => contexto.close());
 
@@ -81,6 +83,23 @@ async function voltar(pagina) {
 
 async function esperarTema(pagina, esperado) {
   await pagina.waitForFunction((valor) => document.documentElement.dataset.tema === valor, esperado, ESPERA);
+}
+
+async function esperarTitulo(pagina, esperado) {
+  await pagina.waitForFunction((valor) => document.title === valor, esperado, ESPERA);
+}
+
+// Um dedo de verdade na tela (pela interface de depuração do Chrome), de um ponto a outro.
+// Precisa do contexto aberto com toque: true.
+async function deslizar(pagina, de, para) {
+  const cdp = await pagina.context().newCDPSession(pagina);
+  const dedo = ([x, y]) => [{ x, y }];
+  const meio = [(de[0] + para[0]) / 2, (de[1] + para[1]) / 2];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: dedo(de) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: dedo(meio) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: dedo(para) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
 }
 
 // ------------------------------------------------------------------ abertura
@@ -500,6 +519,63 @@ test('fechar uma folha e abrir outra em seguida não tira o app do lugar', async
   await voltar(pagina);
   await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
   assert.equal(await noApp(), true);
+  assert.deepEqual(erros, []);
+});
+
+// --------------------------------------------------------------------- gestos
+
+test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => {
+  const { pagina, erros } = await abrir(t, { toque: true });
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  // Dedo para a esquerda: vai para a aba da direita.
+  await deslizar(pagina, [400, 500], [120, 510]);
+  await esperarTitulo(pagina, 'Hábitos - Foco');
+  await deslizar(pagina, [400, 500], [120, 510]);
+  await esperarTitulo(pagina, 'Tarefas - Foco');
+
+  // Na última aba não há para onde avançar.
+  await deslizar(pagina, [400, 500], [120, 510]);
+  await visivel(pagina.getByText('Nenhuma tarefa aqui'));
+  assert.equal(await pagina.title(), 'Tarefas - Foco');
+
+  // Dedo para a direita: volta. A aba em que a pessoa parou fica salva.
+  await deslizar(pagina, [120, 500], [400, 490]);
+  await esperarTitulo(pagina, 'Hábitos - Foco');
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).aba, 'habitos');
+  assert.equal(await botao(pagina, 'Hábitos').getAttribute('aria-current'), 'page');
+
+  // Rolar a lista (movimento vertical) e um toque curto não trocam de aba.
+  await deslizar(pagina, [250, 700], [270, 300]);
+  await deslizar(pagina, [250, 500], [280, 500]);
+  await visivel(pagina.getByText('Nenhum hábito ainda'));
+  assert.equal(await pagina.title(), 'Hábitos - Foco');
+  assert.deepEqual(erros, []);
+});
+
+test('deslizar sobre a faixa de rotinas rola a faixa e não troca de aba', async (t) => {
+  const nomes = ['Home office', 'Presencial', 'Fim de semana', 'Viagem', 'Férias', 'Plantão'];
+  const salvo = JSON.stringify({
+    versao: 2,
+    rotinas: nomes.map((nome, i) => ({
+      id: `r${i}`,
+      nome,
+      itens: [{ id: `i${i}`, tipo: 'item', texto: 'Acordar', hora: null }],
+    })),
+  });
+  const { pagina, erros } = await abrir(t, { salvo, toque: true });
+
+  const faixa = pagina.locator('.faixa');
+  await visivel(faixa);
+  const caixa = await faixa.boundingBox();
+  const y = caixa.y + caixa.height / 2;
+  await deslizar(pagina, [400, y], [120, y]);
+  await pagina.waitForFunction(() => document.querySelector('.faixa').scrollLeft > 0, null, ESPERA);
+  assert.equal(await pagina.title(), 'Rotinas - Foco');
+
+  // O mesmo gesto fora da faixa troca de aba.
+  await deslizar(pagina, [400, 600], [120, 600]);
+  await esperarTitulo(pagina, 'Hábitos - Foco');
   assert.deepEqual(erros, []);
 });
 
