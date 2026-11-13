@@ -82,10 +82,7 @@ function comIdUnico(valor, nome, avisos) {
 // Ligação com hábito que não existe mais vira null sem aviso: é o que sobra quando o hábito é excluído.
 function sanearItem(item, idsDeHabitos, avisos) {
   const texto = cortar(item.texto, LIMITES.textoItem);
-  if (!texto) {
-    avisos.push('item de rotina sem texto, descartado');
-    return [];
-  }
+  if (!texto) return []; // linha em branco, por exemplo de uma edição em andamento: sai sem aviso
   if (item.tipo === 'secao') return [{ id: item.id, tipo: 'secao', texto, hora: null, habitoId: null }];
   if (item.tipo !== 'item') avisos.push('item de rotina com tipo desconhecido, tratado como item');
   return [
