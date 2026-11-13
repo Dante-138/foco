@@ -7,7 +7,8 @@
 // estado = {
 //   versao:       número (sempre a versão atual)
 //   aba:          'rotinas' | 'habitos' | 'tarefas'
-//   rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null }] }]
+//   rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null,
+//                    habitoId: id de um hábito existente | null (marcar o item marca o hábito) }] }]
 //   rotinaAtiva:  id de uma rotina existente | null
 //   marcasRotina: { data: 'AAAA-MM-DD', porRotina: { rotinaId: [itemId] } }   (só o dia corrente;
 //                 os ids ficam na ordem em que os itens foram marcados)
@@ -75,24 +76,33 @@ function comIdUnico(valor, nome, avisos) {
   });
 }
 
-function sanearItem(item, avisos) {
+// Ligação com hábito que não existe mais vira null sem aviso: é o que sobra quando o hábito é excluído.
+function sanearItem(item, idsDeHabitos, avisos) {
   const texto = cortar(item.texto, LIMITES.textoItem);
   if (!texto) {
     avisos.push('item de rotina sem texto, descartado');
     return [];
   }
-  if (item.tipo === 'secao') return [{ id: item.id, tipo: 'secao', texto, hora: null }];
+  if (item.tipo === 'secao') return [{ id: item.id, tipo: 'secao', texto, hora: null, habitoId: null }];
   if (item.tipo !== 'item') avisos.push('item de rotina com tipo desconhecido, tratado como item');
-  return [{ id: item.id, tipo: 'item', texto, hora: horaValida(item.hora) ? item.hora : null }];
+  return [
+    {
+      id: item.id,
+      tipo: 'item',
+      texto,
+      hora: horaValida(item.hora) ? item.hora : null,
+      habitoId: idsDeHabitos.has(item.habitoId) ? item.habitoId : null,
+    },
+  ];
 }
 
-function sanearRotinas(valor, avisos) {
+function sanearRotinas(valor, idsDeHabitos, avisos) {
   return comIdUnico(valor, 'rotinas', avisos).map((rotina) => ({
     id: rotina.id,
     nome: cortar(rotina.nome, LIMITES.nomeRotina) || 'Rotina',
     itens: comIdUnico(rotina.itens, 'itens de rotina', avisos)
       .slice(0, LIMITES.itensPorRotina)
-      .flatMap((item) => sanearItem(item, avisos)),
+      .flatMap((item) => sanearItem(item, idsDeHabitos, avisos)),
   }));
 }
 
@@ -185,8 +195,9 @@ function sanearMarcas(valor, rotinas, dia) {
 // lista de correções feitas (vazia quando os dados já estavam certos).
 export function sanear(dados, { dia, gerarId }) {
   const avisos = [];
-  const rotinas = sanearRotinas(dados.rotinas, avisos);
+  // Os hábitos vêm primeiro: os itens de rotina podem apontar para eles.
   const habitos = sanearHabitos(dados.habitos, avisos);
+  const rotinas = sanearRotinas(dados.rotinas, new Set(habitos.map((x) => x.id)), avisos);
   const listas = sanearListas(dados.listas, gerarId, avisos);
 
   const estado = {

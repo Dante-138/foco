@@ -466,6 +466,37 @@ ul {
   overflow-wrap: anywhere;
 }
 
+/* Item ligado a um hábito: um elo pequeno, na cor do hábito, no fim da linha. */
+.elo {
+  flex: none;
+  line-height: 0;
+  color: var(--cor);
+  opacity: 0.8;
+}
+
+/* Folha "Ligar itens a hábitos": texto do item à esquerda, seletor de hábito à direita. */
+.ligacoes {
+  display: grid;
+  gap: 8px;
+}
+
+.ligacao {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.ligacao > span {
+  overflow-wrap: anywhere;
+}
+
+.ligacao .entrada {
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
 .rotina-item.feito .caixa {
   background: var(--acento);
   border-color: var(--acento);

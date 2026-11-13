@@ -121,6 +121,26 @@ test('editar preserva o id de quem manteve o texto, mesmo mudando o horário', (
   assert.equal(depois[1].hora, '22:05');
 });
 
+test('editar preserva a ligação com o hábito de quem manteve o texto; item novo nasce sem ligação', () => {
+  const antigos = [
+    { id: 'a', tipo: 'item', texto: 'Arrumar a cama', hora: '06:35', habitoId: 'cama' },
+    { id: 'b', tipo: 'item', texto: 'Beber água', hora: null, habitoId: null },
+  ];
+  const itens = textoParaItens('07:00 Arrumar a cama\nBeber água\nItem novo', antigos, contador());
+  assert.deepEqual(
+    itens.map((i) => [i.id, i.hora, i.habitoId]),
+    [
+      ['a', '07:00', 'cama'],
+      ['b', null, null],
+      ['n1', null, null],
+    ],
+  );
+
+  // Mudar o texto faz um item novo: a ligação não acompanha.
+  const renomeado = textoParaItens('Fazer a cama', antigos, contador());
+  assert.deepEqual([renomeado[0].id, renomeado[0].habitoId], ['n1', null]);
+});
+
 test('itens com o mesmo texto recebem ids diferentes e são reaproveitados em ordem', () => {
   const antes = ler('Escovar os dentes\nAlmoço\nEscovar os dentes');
   assert.notEqual(antes[0].id, antes[2].id);

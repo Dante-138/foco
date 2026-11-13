@@ -24,9 +24,9 @@ function valido() {
         id: 'r1',
         nome: 'Home Office',
         itens: [
-          { id: 'i1', tipo: 'secao', texto: 'MANHÃ', hora: null },
-          { id: 'i2', tipo: 'item', texto: 'Acordar', hora: '06:30' },
-          { id: 'i3', tipo: 'item', texto: 'Arrumar a cama', hora: null },
+          { id: 'i1', tipo: 'secao', texto: 'MANHÃ', hora: null, habitoId: null },
+          { id: 'i2', tipo: 'item', texto: 'Acordar', hora: '06:30', habitoId: null },
+          { id: 'i3', tipo: 'item', texto: 'Arrumar a cama', hora: null, habitoId: 'h1' },
         ],
       },
     ],
@@ -190,9 +190,9 @@ test('item sem texto é descartado; tipo desconhecido vira item; seção não te
     ],
   });
   assert.deepEqual(estado.rotinas[0].itens, [
-    { id: '2', tipo: 'item', texto: 'Tipo errado', hora: '07:00' },
-    { id: '3', tipo: 'secao', texto: 'Seção', hora: null },
-    { id: '4', tipo: 'item', texto: 'x'.repeat(LIMITES.textoItem), hora: null },
+    { id: '2', tipo: 'item', texto: 'Tipo errado', hora: '07:00', habitoId: null },
+    { id: '3', tipo: 'secao', texto: 'Seção', hora: null, habitoId: null },
+    { id: '4', tipo: 'item', texto: 'x'.repeat(LIMITES.textoItem), hora: null, habitoId: null },
   ]);
   assert.equal(avisos.length, 2);
 });
@@ -511,4 +511,34 @@ test('tarefa: repetição só vale bem formada e junto de um prazo; campos a mai
       ['texto', null],
     ],
   );
+});
+
+test('item de rotina: a ligação só vale para hábito que existe, e seção nunca tem ligação', () => {
+  const { estado, avisos } = limpar({
+    habitos: [{ id: 'h', nome: 'H', cor: 'azul', tipo: 'simnao' }],
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'R',
+        itens: [
+          { id: '1', tipo: 'item', texto: 'ligado', habitoId: 'h' },
+          { id: '2', tipo: 'item', texto: 'hábito excluído', habitoId: 'nao-existe' },
+          { id: '3', tipo: 'item', texto: 'ligação que não é texto', habitoId: 7 },
+          { id: '4', tipo: 'secao', texto: 'SEÇÃO', habitoId: 'h' },
+          { id: '5', tipo: 'item', texto: 'sem ligação' },
+        ],
+      },
+    ],
+  });
+  assert.deepEqual(
+    estado.rotinas[0].itens.map((i) => [i.id, i.habitoId]),
+    [
+      ['1', 'h'],
+      ['2', null],
+      ['3', null],
+      ['4', null],
+      ['5', null],
+    ],
+  );
+  assert.deepEqual(avisos, []); // ligação solta some sem aviso
 });

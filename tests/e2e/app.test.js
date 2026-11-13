@@ -165,6 +165,94 @@ test('rotina: sair da edição com texto alterado pede confirmação', async (t)
   assert.deepEqual(erros, []);
 });
 
+test('rotina ligada a hábito: marcar o item marca o hábito; desfazer e desmarcar tudo desfazem', async (t) => {
+  const habito = (id, nome, extra) => ({
+    id,
+    nome,
+    cor: 'azul',
+    tipo: 'simnao',
+    unidade: null,
+    meta: null,
+    arquivado: false,
+    ...extra,
+  });
+  const item = (id, texto) => ({ id, tipo: 'item', texto, hora: null, habitoId: null });
+  const salvo = JSON.stringify({
+    versao: 4,
+    habitos: [
+      habito('cama', 'Arrumar a cama - <8h'),
+      habito('agua', 'Beber água', { tipo: 'numero', unidade: 'copos', meta: 2 }),
+      habito('ler', 'Leitura'),
+    ],
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          item('1', 'Arrumar a cama'),
+          item('2', 'Beber água'),
+          item('3', 'Beber água'),
+          item('4', 'Escovar os dentes'),
+        ],
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  // Registro de hoje de cada hábito que tem algum: { idDoHabito: valor }
+  const registros = async () => {
+    const e = JSON.parse(await lerSalvo(pagina, CHAVE));
+    return Object.fromEntries(Object.entries(e.registros).map(([id, r]) => [id, Object.values(r)[0]]));
+  };
+
+  // A sugestão pelo nome liga "Arrumar a cama" e os dois "Beber água"; "Escovar os dentes" fica sem.
+  await botao(pagina, 'Opções da rotina').click();
+  await botao(pagina, 'Ligar itens a hábitos').click();
+  await botao(pagina, 'Sugerir pelo nome').click();
+  await visivel(pagina.getByText('3 sugestões. Confira e salve.'));
+  assert.deepEqual(
+    await pagina.locator('.ligacao select').evaluateAll((lista) => lista.map((s) => s.value)),
+    ['cama', 'agua', 'agua', ''],
+  );
+  await botao(pagina, 'Salvar').click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.rotina-item .elo').length === 3,
+    null,
+    ESPERA,
+  );
+
+  // Marcar o item marca o hábito: sim ou não vira "feito", numérico soma 1 por item.
+  await pagina.getByRole('checkbox', { name: /Arrumar a cama/ }).click();
+  await pagina
+    .getByRole('checkbox', { name: /Beber água/ })
+    .first()
+    .click();
+  await visivel(pagina.getByText('2 de 4 hoje'));
+  assert.deepEqual(await registros(), { cama: 'feito', agua: 1 });
+  await pagina
+    .getByRole('checkbox', { name: /Beber água/ })
+    .first()
+    .click();
+  await visivel(pagina.getByText('3 de 4 hoje'));
+  assert.deepEqual(await registros(), { cama: 'feito', agua: 2 });
+
+  await botao(pagina, 'Hábitos').click();
+  await visivel(botao(pagina, 'Arrumar a cama - <8h, hoje: feito'));
+  await visivel(botao(pagina, 'Beber água, hoje: 2 copos'));
+  await visivel(botao(pagina, 'Leitura, hoje: não feito'));
+
+  // Desfazer volta a última marca (um "Beber água"); desmarcar tudo zera o resto.
+  await botao(pagina, 'Rotinas').click();
+  await botao(pagina, 'Desfazer a última marca').click();
+  await visivel(pagina.getByText('2 de 4 hoje'));
+  assert.deepEqual(await registros(), { cama: 'feito', agua: 1 });
+
+  await botao(pagina, 'Opções da rotina').click();
+  await botao(pagina, 'Desmarcar tudo').click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  assert.deepEqual(await registros(), {});
+  assert.deepEqual(erros, []);
+});
+
 test('rotina: item marcado desce para o fim da seção, e o desfazer volta uma marca por vez', async (t) => {
   const { pagina, erros } = await abrir(t);
   const ordem = () => pagina.locator('.rotina-item .rotina-texto').allTextContents();

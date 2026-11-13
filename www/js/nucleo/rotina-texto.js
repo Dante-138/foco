@@ -43,14 +43,15 @@ function linhaParaItem(linha) {
 }
 
 // Reaproveita o id de quem manteve o mesmo texto, para a edição não apagar
-// as marcas de hoje. Mudar só o horário de um item preserva a marca.
+// as marcas de hoje nem a ligação com um hábito. Mudar só o horário de um item
+// preserva as duas coisas; mudar o texto faz dele um item novo, sem ligação.
 // Linhas além do limite de itens por rotina são descartadas.
 export function textoParaItens(texto, antigos = [], gerarId = uid) {
   const chave = (i) => `${i.tipo}|${i.texto}`;
   const livres = new Map();
   for (const antigo of antigos) {
     const fila = livres.get(chave(antigo)) ?? [];
-    fila.push(antigo.id);
+    fila.push(antigo);
     livres.set(chave(antigo), fila);
   }
   return texto
@@ -58,7 +59,10 @@ export function textoParaItens(texto, antigos = [], gerarId = uid) {
     .map(linhaParaItem)
     .filter(Boolean)
     .slice(0, LIMITES.itensPorRotina)
-    .map((item) => ({ id: livres.get(chave(item))?.shift() ?? gerarId(), ...item }));
+    .map((item) => {
+      const antigo = livres.get(chave(item))?.shift();
+      return { id: antigo?.id ?? gerarId(), ...item, habitoId: antigo?.habitoId ?? null };
+    });
 }
 
 export function itensParaTexto(itens) {

@@ -12,7 +12,11 @@ function comDados() {
   return {
     ...estadoInicial(contexto()),
     rotinas: [
-      { id: 'r', nome: 'Manhã', itens: [{ id: 'i', tipo: 'item', texto: 'Acordar', hora: '06:30' }] },
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [{ id: 'i', tipo: 'item', texto: 'Acordar', hora: '06:30', habitoId: 'h' }],
+      },
     ],
     rotinaAtiva: 'r',
     habitos: [

@@ -32,7 +32,8 @@ function v1ParaV2(dados) {
 // para uma versão antiga do app não abrir estes dados e apagar, ao gravar, os
 // campos que ela não conhece.
 
-// A v4 acrescenta, nas rotinas, a opção de mandar os itens marcados para o fim e, nas
+// A v4 acrescenta, nas rotinas, a opção de mandar os itens marcados para o fim e a
+// ligação de um item a um hábito; nas
 // tarefas, o horário e a repetição. Como na v3, não há o que converter: os campos novos nascem com o
 // valor padrão na validação.
 

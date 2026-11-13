@@ -59,9 +59,13 @@ const pontuacoes = new Map(); // id -> { dia, registro, valor }
 function pontuacaoDe(habito, dia) {
   const registro = estado.registros[habito.id] ?? null;
   const guardada = pontuacoes.get(habito.id);
-  if (guardada?.dia === dia && guardada.registro === registro) return guardada.valor;
+  // O valor de hoje entra na conferência porque a aba Rotinas também o altera (item ligado a hábito).
+  const deHoje = registro?.[dia];
+  if (guardada?.dia === dia && guardada.registro === registro && guardada.deHoje === deHoje) {
+    return guardada.valor;
+  }
   const valor = registro ? pontuacao(habito, registro, dia) : 0;
-  pontuacoes.set(habito.id, { dia, registro, valor });
+  pontuacoes.set(habito.id, { dia, registro, deHoje, valor });
   return valor;
 }
 
@@ -318,6 +322,10 @@ function editarHabito(habito) {
     if (!(await confirmar(`Excluir o hábito "${habito.nome}" e todo o histórico dele?`))) return;
     estado.habitos = estado.habitos.filter((x) => x.id !== habito.id);
     delete estado.registros[habito.id];
+    // Itens de rotina ligados a este hábito ficam sem ligação.
+    for (const rotina of estado.rotinas) {
+      for (const item of rotina.itens) if (item.habitoId === habito.id) item.habitoId = null;
+    }
     salvar();
     fechar();
     redesenhar();
