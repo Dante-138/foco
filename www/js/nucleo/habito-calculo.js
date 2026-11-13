@@ -1,9 +1,7 @@
-// Regras dos hábitos, sem interface: valores, metas e taxa de cumprimento.
+// Regras dos hábitos, sem interface: valores, metas, pontuação e sequências.
 // O registro de um hábito é { 'AAAA-MM-DD': 'feito' | 'pulado' | número }.
 
-import { somaDias } from './datas.js';
-
-export const JANELA_ANEL = 7; // dias considerados no anel de progresso
+import { diasEntre } from './datas.js';
 
 export const formatar = (n) => String(n).replace('.', ',');
 
@@ -52,15 +50,55 @@ export function proximaMarca(atual) {
   return 'feito';
 }
 
-// Fração de dias cumpridos nos últimos "janela" dias até "dia", ignorando os pulados.
-export function taxa(habito, registro, dia, janela = JANELA_ANEL) {
-  let feitos = 0;
-  let validos = 0;
-  for (let i = 0; i < janela; i += 1) {
-    const valor = registro[somaDias(dia, -i)];
-    if (valor === 'pulado') continue;
-    validos += 1;
-    if (cumprido(habito, valor)) feitos += 1;
+// Parte do dia que foi cumprida, de 0 a 1. O numérico conta a fração da meta já feita.
+function parteCumprida(habito, valor) {
+  if (habito.tipo !== 'numero') return valor === 'feito' ? 1 : 0;
+  return typeof valor === 'number' ? Math.min(1, valor / metaDe(habito)) : 0;
+}
+
+// Peso do dia anterior na pontuação: o do Loop para hábito diário. Com ele, um hábito
+// feito todo dia chega perto de 80% em um mês e de 96% em dois.
+const PESO = 0.5 ** (1 / 13);
+
+// Dias com registro até "dia", em ordem.
+const diasRegistrados = (registro, dia) =>
+  Object.keys(registro)
+    .filter((d) => d <= dia)
+    .sort();
+
+// Pontuação do hábito, de 0 a 1, como a do Loop: uma média em que os dias recentes pesam mais.
+//   a cada dia: nova = anterior * PESO + parteCumprida * (1 - PESO)
+// Dia em branco conta como não feito; dia pulado não mexe na pontuação. Hoje só entra
+// na conta depois de registrado, para a pontuação não cair antes de o dia acabar.
+export function pontuacao(habito, registro, dia) {
+  let pontos = 0;
+  let anterior = null;
+  for (const d of diasRegistrados(registro, dia)) {
+    if (anterior) pontos *= PESO ** (diasEntre(anterior, d) - 1); // dias em branco no meio
+    if (registro[d] !== 'pulado') {
+      pontos = pontos * PESO + parteCumprida(habito, registro[d]) * (1 - PESO);
+    }
+    anterior = d;
   }
-  return validos ? feitos / validos : 0;
+  // dias em branco depois do último registro, até ontem
+  if (anterior && anterior < dia) pontos *= PESO ** (diasEntre(anterior, dia) - 1);
+  return pontos;
+}
+
+// Sequências de dias seguidos cumprindo o hábito: { atual, melhor }.
+// Dia pulado não quebra a sequência nem entra na contagem; dia em branco quebra.
+// A atual vale até ontem: hoje ainda em branco não a interrompe.
+export function sequencias(habito, registro, dia) {
+  let corrida = 0;
+  let melhor = 0;
+  let anterior = null;
+  for (const d of diasRegistrados(registro, dia)) {
+    if (anterior === null || diasEntre(anterior, d) !== 1) corrida = 0;
+    if (cumprido(habito, registro[d])) corrida += 1;
+    else if (registro[d] !== 'pulado') corrida = 0; // numérico abaixo da meta
+    melhor = Math.max(melhor, corrida);
+    anterior = d;
+  }
+  const viva = anterior !== null && diasEntre(anterior, dia) <= 1;
+  return { atual: viva ? corrida : 0, melhor };
 }

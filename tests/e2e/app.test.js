@@ -242,6 +242,48 @@ test('hábito: cumprir destaca a célula e o anel; as outras marcas só dão o p
   assert.deepEqual(erros, []);
 });
 
+test('hábito: a edição mostra a pontuação e as sequências, e o anel acompanha', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const tracoDoAnel = () =>
+    pagina.evaluate(() =>
+      Number(
+        document.querySelector('.anel circle:last-child').getAttribute('stroke-dasharray').split(' ')[0],
+      ),
+    );
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+  await visivel(botao(pagina, 'Leitura, hoje: não feito'));
+  assert.equal(await tracoDoAnel(), 0);
+
+  // Hoje, ontem e anteontem feitos: três dias seguidos.
+  for (const coluna of [0, 1, 2]) await pagina.locator('.habito .cel').nth(coluna).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.habito .cel:not(.vazio)').length === 3,
+    null,
+    ESPERA,
+  );
+  assert.ok((await tracoDoAnel()) > 0);
+
+  await botao(pagina, 'Editar Leitura').click();
+  await visivel(pagina.getByText('Pontuação 15%. Sequência atual: 3 dias. Melhor: 3 dias.'));
+  await botao(pagina, 'Cancelar').click();
+
+  // Ontem volta para "não feito" (feito -> pulado -> vazio): a sequência atual fica só com hoje.
+  await pagina.locator('.habito .cel').nth(1).click();
+  await pagina.locator('.habito .cel').nth(1).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.habito .cel.vazio').length >= 1,
+    null,
+    ESPERA,
+  );
+  await botao(pagina, 'Editar Leitura').click();
+  await visivel(pagina.getByText(/Sequência atual: 1 dia\. Melhor: 1 dia\./));
+  assert.deepEqual(erros, []);
+});
+
 test('hábitos: ocultar concluídos esconde o que já foi resolvido hoje, e o filtro traz de volta', async (t) => {
   const habito = (id, nome) => ({
     id,

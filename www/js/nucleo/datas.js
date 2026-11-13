@@ -22,6 +22,12 @@ export function somaDias(iso, n) {
   return isoLocal(data);
 }
 
+// Dias corridos de "de" até "ate" (negativo se "ate" vem antes). O arredondamento
+// absorve a hora a mais ou a menos dos dias de mudança de horário de verão.
+export function diasEntre(de, ate) {
+  return Math.round((deIso(ate) - deIso(de)) / 86_400_000);
+}
+
 // Aceita só datas reais no formato AAAA-MM-DD: "2026-02-30" e "2026-1-5" são recusadas.
 export function dataValida(valor) {
   return typeof valor === 'string' && FORMATO_ISO.test(valor) && isoLocal(deIso(valor)) === valor;

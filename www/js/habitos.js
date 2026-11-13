@@ -11,9 +11,10 @@ import {
   lerNumero,
   metaDe,
   cumprido,
+  pontuacao,
   proximaMarca,
   resolvido,
-  taxa,
+  sequencias,
   visiveis,
 } from './nucleo/habito-calculo.js';
 import {
@@ -51,11 +52,24 @@ function respostaAoToque(habito, dia) {
   return recemMarcada.concluiu ? ' concluiu' : ' marcou';
 }
 
-// Anel de progresso: fração de dias cumpridos na última semana.
+// A pontuação percorre o histórico inteiro do hábito. Fica guardada por hábito e só é
+// refeita quando o registro dele muda, quando o hábito é editado ou quando o dia vira.
+const pontuacoes = new Map(); // id -> { dia, registro, valor }
+
+function pontuacaoDe(habito, dia) {
+  const registro = estado.registros[habito.id] ?? null;
+  const guardada = pontuacoes.get(habito.id);
+  if (guardada?.dia === dia && guardada.registro === registro) return guardada.valor;
+  const valor = registro ? pontuacao(habito, registro, dia) : 0;
+  pontuacoes.set(habito.id, { dia, registro, valor });
+  return valor;
+}
+
+// Anel de progresso: a pontuação do hábito, como no Loop.
 function anel(habito, diaHoje) {
   const raio = 7;
   const volta = 2 * Math.PI * raio;
-  const fracao = taxa(habito, estado.registros[habito.id] ?? {}, diaHoje);
+  const fracao = pontuacaoDe(habito, diaHoje);
   const circulo = { cx: 10, cy: 10, r: raio, fill: 'none', stroke: 'currentColor', 'stroke-width': 3 };
   return h(
     'span',
@@ -80,6 +94,7 @@ function gravar(habito, dia, valor) {
   const registro = (estado.registros[habito.id] ??= {});
   if (valor == null) delete registro[dia];
   else registro[dia] = valor;
+  pontuacoes.delete(habito.id);
   salvar();
 
   // Resposta ao toque: a marca nova dá um pulo; cumprir o hábito ganha destaque e vibração própria.
@@ -189,6 +204,16 @@ function mover(habito, passo) {
   redesenhar();
 }
 
+// Linha de resumo na edição do hábito: pontuação e sequências.
+function resumoDoHabito(habito) {
+  const registro = estado.registros[habito.id] ?? {};
+  const dia = hoje();
+  const { atual, melhor } = sequencias(habito, registro, dia);
+  const dias = (n) => `${n} ${n === 1 ? 'dia' : 'dias'}`;
+  const pontos = Math.round(pontuacao(habito, registro, dia) * 100);
+  return `Pontuação ${pontos}%. Sequência atual: ${dias(atual)}. Melhor: ${dias(melhor)}.`;
+}
+
 function editarHabito(habito) {
   let cor = habito?.cor ?? CORES[0].chave;
   let tipo = habito?.tipo ?? 'simnao';
@@ -280,8 +305,10 @@ function editarHabito(habito) {
       dados.meta = lerNumero(meta.value) || 1;
     }
 
-    if (habito) Object.assign(habito, dados);
-    else estado.habitos.push({ id: uid(), ...dados, arquivado: false });
+    if (habito) {
+      Object.assign(habito, dados);
+      pontuacoes.delete(habito.id); // tipo ou meta podem ter mudado
+    } else estado.habitos.push({ id: uid(), ...dados, arquivado: false });
     salvar();
     fechar();
     redesenhar();
@@ -312,6 +339,7 @@ function editarHabito(habito) {
     corpo: h(
       'form',
       { class: 'folha-form', onsubmit: aoSalvar },
+      habito ? h('p', { class: 'dica' }, resumoDoHabito(habito)) : null,
       campo('Nome', nome),
       h('div', { class: 'rotulo' }, 'Cor', amostras),
       h('div', { class: 'rotulo' }, 'Tipo', segmentos),
