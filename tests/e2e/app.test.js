@@ -82,6 +82,19 @@ async function voltar(pagina) {
   await pagina.goBack();
 }
 
+// Recarrega a página depois que o histórico assentou. Fechar uma folha desfaz a guarda
+// do histórico com um history.back() que só termina um instante depois; recarregar no
+// meio disso aborta a navegação (net::ERR_ABORTED). Assentado quer dizer: a guarda
+// existe se, e somente se, há uma folha aberta.
+async function recarregar(pagina) {
+  await pagina.waitForFunction(
+    () => (document.querySelector('dialog[open]') !== null) === (window.history.state?.folha === true),
+    null,
+    ESPERA,
+  );
+  await pagina.reload();
+}
+
 async function esperarTema(pagina, esperado) {
   await pagina.waitForFunction((valor) => document.documentElement.dataset.tema === valor, esperado, ESPERA);
 }
@@ -164,7 +177,7 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
   await visivel(pagina.getByText('1 de 2 hoje'));
 
-  await pagina.reload();
+  await recarregar(pagina);
   await visivel(pagina.getByText('1 de 2 hoje'));
   assert.equal(await pagina.getByRole('checkbox', { name: /Levantar/ }).getAttribute('aria-checked'), 'true');
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
@@ -1061,7 +1074,7 @@ test('tema: começa escuro mesmo com o sistema em claro, e a escolha persiste', 
   await pagina.getByRole('radio', { name: 'Claro' }).click();
   await esperarTema(pagina, 'claro');
 
-  await pagina.reload();
+  await recarregar(pagina);
   await visivel(botao(pagina, 'Rotinas'));
   assert.equal(await tema(pagina), 'claro');
 
@@ -1188,7 +1201,7 @@ test('backup: os dados copiados em um aparelho são restaurados em outro', async
   await visivel(botao(destino.pagina, 'Leitura, hoje: feito')); // abriu na aba que estava no backup
   assert.equal(await destino.pagina.locator('dialog').count(), 0);
 
-  await destino.pagina.reload();
+  await recarregar(destino.pagina);
   await visivel(botao(destino.pagina, 'Leitura, hoje: feito'));
   assert.deepEqual([...origem.erros, ...destino.erros], []);
 });
