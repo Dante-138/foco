@@ -7,6 +7,7 @@ import { hoje, somaDias } from './nucleo/datas.js';
 import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
 import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
 import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
+import { pedirPermissaoSeFaltar } from './lembretes.js';
 import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
 
 let concluidasAbertas = false;
@@ -195,6 +196,8 @@ function editarTarefa(tarefa) {
     salvar();
     fechar();
     redesenhar();
+    // Tarefa com data pode avisar: é a hora de pedir a permissão, se ainda não foi pedida.
+    if (dados.prazo) pedirPermissaoSeFaltar();
   };
 
   const excluir = async () => {

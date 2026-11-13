@@ -53,7 +53,10 @@ export function salvar() {
   } catch (erro) {
     console.error('Falha ao salvar', erro);
     window.dispatchEvent(new CustomEvent('foco:falha-ao-salvar'));
+    return;
   }
+  // Quem depende dos dados salvos (os lembretes) se atualiza por este aviso.
+  window.dispatchEvent(new Event('foco:salvo'));
 }
 
 // Troca todo o estado pelo de um backup já validado (nucleo/backup.js).

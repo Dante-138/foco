@@ -2,5 +2,11 @@
   "appId": "io.github.dante138.foco",
   "appName": "Foco",
   "webDir": "www",
-  "backgroundColor": "#000000"
+  "backgroundColor": "#000000",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_foco",
+      "iconColor": "#8AB4F8"
+    }
+  }
 }

@@ -26,6 +26,7 @@ export function estadoInicial({ dia, gerarId }) {
     listaAtiva: lista.id,
     tarefas: [],
     ordemTarefas: ORDENS_TAREFAS[0],
+    lembretes: true,
   };
 }
 

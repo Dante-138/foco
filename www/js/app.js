@@ -10,6 +10,7 @@ import { habitos } from './habitos.js';
 import { tarefas } from './tarefas.js';
 import { aplicarTema } from './tema.js';
 import { abrirAjustes } from './ajustes.js';
+import { agendarSincronia } from './lembretes.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar().
 const ABAS = [rotinas, habitos, tarefas];
@@ -153,7 +154,9 @@ function iniciar() {
     desenhar({ manterRolagem: true });
   };
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) conferirDia();
+    if (document.hidden) return;
+    conferirDia();
+    agendarSincronia(); // lembrete que já passou sai do plano
   });
   setInterval(conferirDia, 60_000);
 
@@ -166,6 +169,10 @@ function iniciar() {
     clearTimeout(esperaLargura);
     esperaLargura = setTimeout(() => desenhar({ manterRolagem: true }), 150);
   });
+
+  // Lembretes: o que está agendado no sistema acompanha os dados salvos.
+  window.addEventListener('foco:salvo', agendarSincronia);
+  agendarSincronia();
 
   desenhar();
 

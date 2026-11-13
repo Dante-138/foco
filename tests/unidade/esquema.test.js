@@ -82,6 +82,7 @@ function valido() {
       },
     ],
     ordemTarefas: 'titulo',
+    lembretes: false,
   };
 }
 
@@ -115,6 +116,7 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     listaAtiva: 'id-gerado',
     tarefas: [],
     ordemTarefas: 'data',
+    lembretes: true,
   });
   assert.deepEqual(avisos, []);
 });
@@ -541,4 +543,11 @@ test('item de rotina: a ligação só vale para hábito que existe, e seção nu
     ],
   );
   assert.deepEqual(avisos, []); // ligação solta some sem aviso
+});
+
+test('lembretes: só o valor falso desliga; qualquer outro vale o padrão, ligado', () => {
+  for (const valor of [undefined, null, 0, 'false', {}, true]) {
+    assert.equal(limpar({ lembretes: valor }).estado.lembretes, true);
+  }
+  assert.equal(limpar({ lembretes: false }).estado.lembretes, false);
 });

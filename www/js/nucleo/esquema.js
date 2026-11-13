@@ -25,6 +25,7 @@
 //                    repeticao: { cada, unidade } | null (só existe com prazo; ver repeticao.js),
 //                    estrela, feita, criadaEm, feitaEm: número | null }]
 //   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
+//   lembretes:    verdadeiro agenda notificação para as tarefas com prazo (padrão: verdadeiro)
 // }
 //
 // Regra de correção: o que dá para aproveitar é corrigido (texto cortado no
@@ -220,6 +221,7 @@ export function sanear(dados, { dia, gerarId }) {
         : listas[0].id,
     tarefas: sanearTarefas(dados.tarefas, listas, avisos),
     ordemTarefas: ORDENS_TAREFAS.includes(dados.ordemTarefas) ? dados.ordemTarefas : ORDENS_TAREFAS[0],
+    lembretes: dados.lembretes !== false,
   };
   return { estado, avisos };
 }

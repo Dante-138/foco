@@ -24,6 +24,7 @@ test('estado inicial tem uma lista, nenhuma rotina e a data de hoje nas marcas',
     listaAtiva: 'id-gerado',
     tarefas: [],
     ordemTarefas: 'data',
+    lembretes: true,
   });
 });
 

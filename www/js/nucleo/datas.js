@@ -11,6 +11,12 @@ export function isoLocal(data = new Date()) {
 
 export const hoje = () => isoLocal();
 
+// Momento atual no fuso local, "AAAA-MM-DDTHH:MM". Nesse formato a ordem alfabética é a do relógio.
+export function agoraLocal(data = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${isoLocal(data)}T${p(data.getHours())}:${p(data.getMinutes())}`;
+}
+
 export function deIso(iso) {
   const [ano, mes, dia] = iso.split('-').map(Number);
   return new Date(ano, mes - 1, dia);

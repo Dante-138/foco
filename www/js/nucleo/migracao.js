@@ -34,7 +34,7 @@ function v1ParaV2(dados) {
 
 // A v4 acrescenta, nas rotinas, a opção de mandar os itens marcados para o fim e a
 // ligação de um item a um hábito; nas
-// tarefas, o horário e a repetição. Como na v3, não há o que converter: os campos novos nascem com o
+// tarefas, o horário, a repetição e a opção de lembretes. Como na v3, não há o que converter: os campos novos nascem com o
 // valor padrão na validação.
 
 // Cada passo sobe uma versão. Altera e devolve o próprio objeto.

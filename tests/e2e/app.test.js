@@ -31,7 +31,7 @@ after(async () => {
 // Abre o app em um contexto isolado. "salvo" é o texto gravado no
 // armazenamento antes de o app carregar (undefined = nada salvo). "toque" liga a
 // tela de toque no navegador, para os testes de gesto.
-async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false } = {}) {
+async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false, preparar } = {}) {
   const contexto = await navegador.newContext({
     viewport: { width: 500, height: 1000 },
     locale: 'pt-BR',
@@ -40,6 +40,7 @@ async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false } = {}) {
     hasTouch: toque,
   });
   t.after(() => contexto.close());
+  await preparar?.(contexto); // para o teste instalar algo antes de o app carregar
 
   const erros = [];
   const novaPagina = async () => {
@@ -84,6 +85,36 @@ async function voltar(pagina) {
 async function esperarTema(pagina, esperado) {
   await pagina.waitForFunction((valor) => document.documentElement.dataset.tema === valor, esperado, ESPERA);
 }
+
+// Põe no lugar do plugin de notificações do Android um sistema de mentira, que guarda o
+// que o app agenda e cancela em window.sistemaDeLembretes. "permissao" é a resposta inicial.
+const comLembretes = (permissao) => (contexto) =>
+  contexto.addInitScript((inicial) => {
+    const sistema = { permissao: inicial, pedidos: 0, pendentes: [] };
+    window.sistemaDeLembretes = sistema;
+    window.Capacitor = {
+      Plugins: {
+        LocalNotifications: {
+          checkPermissions: () => Promise.resolve({ display: sistema.permissao }),
+          requestPermissions: () => {
+            sistema.pedidos += 1;
+            sistema.permissao = 'granted';
+            return Promise.resolve({ display: 'granted' });
+          },
+          getPending: () => Promise.resolve({ notifications: sistema.pendentes.map(({ id }) => ({ id })) }),
+          cancel: ({ notifications }) => {
+            const ids = new Set(notifications.map((n) => n.id));
+            sistema.pendentes = sistema.pendentes.filter((n) => !ids.has(n.id));
+            return Promise.resolve();
+          },
+          schedule: ({ notifications }) => {
+            sistema.pendentes.push(...notifications);
+            return Promise.resolve({ notifications: notifications.map(({ id }) => ({ id })) });
+          },
+        },
+      },
+    };
+  }, permissao);
 
 async function esperarTitulo(pagina, esperado) {
   await pagina.waitForFunction((valor) => document.title === valor, esperado, ESPERA);
@@ -808,6 +839,117 @@ test('tarefa: ao concluir, a linha mostra a marca e o risco antes de sair da lis
   await visivel(botao(pagina, 'Concluídas (1)'));
   assert.equal(await pagina.locator('.tarefa.concluindo').count(), 0);
   assert.deepEqual(erros, []);
+});
+
+// ----------------------------------------------------------------- lembretes
+
+test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; concluir cancela', async (t) => {
+  const { pagina, erros } = await abrir(t, { preparar: comLembretes('prompt') });
+  const pendentes = (n) =>
+    pagina.waitForFunction((esperado) => window.sistemaDeLembretes.pendentes.length === esperado, n, ESPERA);
+
+  await botao(pagina, 'Tarefas').click();
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Reunião');
+  await botao(pagina, 'Amanhã').click();
+  await pagina.locator('dialog[open] input[type=time]').fill('14:30');
+  await botao(pagina, 'Salvar').click();
+  await pendentes(1);
+
+  const sistema = await pagina.evaluate(() => window.sistemaDeLembretes);
+  assert.equal(sistema.pedidos, 1);
+  const [aviso] = sistema.pendentes;
+  assert.equal(aviso.title, 'Reunião');
+  assert.equal(aviso.body, 'Minhas tarefas');
+  assert.equal(aviso.isExactNotification, false); // nunca abre a tela de "Alarmes e lembretes"
+  assert.equal(aviso.schedule.allowWhileIdle, true);
+  assert.ok(Number.isInteger(aviso.id) && aviso.id > 0);
+  const quando = await pagina.evaluate((iso) => {
+    const data = new Date(iso);
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+    return [data.getHours(), data.getMinutes(), data.getDate() === amanha.getDate()];
+  }, aviso.schedule.at);
+  assert.deepEqual(quando, [14, 30, true]);
+
+  // Tarefa sem data não avisa, e a permissão não é pedida de novo.
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Sem data');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByText('2 pendentes', { exact: true }));
+
+  await pagina.getByRole('checkbox', { name: 'Concluir: Reunião' }).click();
+  await pendentes(0);
+  assert.equal(await pagina.evaluate(() => window.sistemaDeLembretes.pedidos), 1);
+  assert.deepEqual(erros, []);
+});
+
+test('lembretes: só com data avisa às 9h, e desligar em Ajustes cancela tudo', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 4,
+    aba: 'tarefas',
+    listas: [{ id: 'l', nome: 'Faculdade' }],
+    tarefas: [
+      {
+        id: 't',
+        listaId: 'l',
+        titulo: 'Prova',
+        notas: 'Levar o certificado',
+        prazo: '2099-01-01',
+        hora: null,
+        estrela: false,
+        feita: false,
+        criadaEm: 1,
+        feitaEm: null,
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo, preparar: comLembretes('granted') });
+  const pendentes = (n) =>
+    pagina.waitForFunction((esperado) => window.sistemaDeLembretes.pendentes.length === esperado, n, ESPERA);
+
+  await pendentes(1);
+  const [aviso] = await pagina.evaluate(() => window.sistemaDeLembretes.pendentes);
+  assert.equal(aviso.body, 'Faculdade · Levar o certificado');
+  assert.deepEqual(
+    await pagina.evaluate((iso) => [new Date(iso).getHours(), new Date(iso).getMinutes()], aviso.schedule.at),
+    [9, 0],
+  );
+
+  await botao(pagina, 'Ajustes').click();
+  await visivel(pagina.getByText('Tarefa com horário avisa na hora; só com data, às 9h.'));
+  await pagina.getByRole('switch', { name: 'Lembretes ligados' }).click();
+  await visivel(pagina.getByRole('switch', { name: 'Lembretes desligados' }));
+  await visivel(pagina.getByText('Nenhuma tarefa avisa.'));
+  await pendentes(0);
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).lembretes, false);
+
+  // Ligar de novo agenda outra vez.
+  await pagina.getByRole('switch', { name: 'Lembretes desligados' }).click();
+  await pendentes(1);
+  assert.deepEqual(erros, []);
+});
+
+test('lembretes: com a notificação bloqueada nada é agendado nem pedido; no navegador a seção explica', async (t) => {
+  const tarefa = { id: 't', listaId: 'l', titulo: 'Prova', prazo: '2099-01-01', criadaEm: 1 };
+  const salvo = JSON.stringify({ versao: 4, listas: [{ id: 'l', nome: 'Faculdade' }], tarefas: [tarefa] });
+
+  const bloqueado = await abrir(t, { salvo, preparar: comLembretes('denied') });
+  await botao(bloqueado.pagina, 'Ajustes').click();
+  await visivel(
+    bloqueado.pagina.getByText('As notificações do Foco estão bloqueadas nas configurações do Android.'),
+  );
+  await bloqueado.pagina.waitForTimeout(2000); // mais que a espera da sincronização
+  assert.deepEqual(await bloqueado.pagina.evaluate(() => window.sistemaDeLembretes), {
+    permissao: 'denied',
+    pedidos: 0,
+    pendentes: [],
+  });
+
+  const semPlugin = await abrir(t, { salvo });
+  await botao(semPlugin.pagina, 'Ajustes').click();
+  await visivel(semPlugin.pagina.getByText('Os lembretes das tarefas funcionam no app Android.'));
+  assert.deepEqual([...bloqueado.erros, ...semPlugin.erros], []);
 });
 
 // ---------------------------------------------------------------------- tema
