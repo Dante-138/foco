@@ -7,11 +7,23 @@ import { hoje, deIso, somaDias } from './nucleo/datas.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { CORES, COR_PADRAO, corValida } from './nucleo/paleta.js';
 import { formatar, lerNumero, metaDe, cumprido, proximaMarca, taxa } from './nucleo/habito-calculo.js';
-import { h, svg, icone, abrirFolha, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
+import { h, svg, icone, abrirFolha, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
 
 const corCss = (chave) => `var(--cor-${corValida(chave) ? chave : COR_PADRAO})`;
 
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+// A célula que acabou de ser marcada, para o próximo desenho animar só ela:
+// { habitoId, dia, concluiu }. O desenho consome e zera.
+let recemMarcada = null;
+
+const acabouDeConcluir = (habito) => recemMarcada?.habitoId === habito.id && recemMarcada.concluiu;
+
+// Classe de animação para a célula que acabou de ser marcada; vazio para as outras.
+function respostaAoToque(habito, dia) {
+  if (recemMarcada?.habitoId !== habito.id || recemMarcada.dia !== dia) return '';
+  return recemMarcada.concluiu ? ' concluiu' : ' marcou';
+}
 
 // Anel de progresso: fração de dias cumpridos na última semana.
 function anel(habito, diaHoje) {
@@ -21,7 +33,7 @@ function anel(habito, diaHoje) {
   const circulo = { cx: 10, cy: 10, r: raio, fill: 'none', stroke: 'currentColor', 'stroke-width': 3 };
   return h(
     'span',
-    { class: 'anel' },
+    { class: `anel${acabouDeConcluir(habito) ? ' pulsa' : ''}` },
     svg(
       'svg',
       { viewBox: '0 0 20 20', width: 20, height: 20, 'aria-hidden': 'true' },
@@ -43,6 +55,11 @@ function gravar(habito, dia, valor) {
   if (valor == null) delete registro[dia];
   else registro[dia] = valor;
   salvar();
+
+  // Resposta ao toque: a marca nova dá um pulo; cumprir o hábito ganha destaque e vibração própria.
+  const concluiu = cumprido(habito, valor);
+  recemMarcada = { habitoId: habito.id, dia, concluiu };
+  vibrar(concluiu ? 'concluido' : 'toque');
   redesenhar();
 }
 
@@ -278,6 +295,7 @@ function editarHabito(habito) {
 function celula(habito, dia, diaHoje) {
   const valor = estado.registros[habito.id]?.[dia];
   const base = { type: 'button' };
+  const resposta = respostaAoToque(habito, dia);
 
   if (habito.tipo === 'numero') {
     const pulado = valor === 'pulado';
@@ -287,7 +305,7 @@ function celula(habito, dia, diaHoje) {
       'button',
       {
         ...base,
-        class: `cel num${numero == null && !pulado ? ' vazio' : ''}${numero != null && !cumprido(habito, numero) ? ' parcial' : ''}`,
+        class: `cel num${numero == null && !pulado ? ' vazio' : ''}${numero != null && !cumprido(habito, numero) ? ' parcial' : ''}${resposta}`,
         'aria-label': `${habito.nome}, ${rotuloDia(dia, diaHoje)}: ${estadoTexto}`,
         onclick: () => pedirValor(habito, dia),
       },
@@ -303,7 +321,7 @@ function celula(habito, dia, diaHoje) {
     'button',
     {
       ...base,
-      class: `cel${marca === 'x' ? ' vazio' : ''}`,
+      class: `cel${marca === 'x' ? ' vazio' : ''}${resposta}`,
       'aria-label': `${habito.nome}, ${rotuloDia(dia, diaHoje)}: ${estadoTexto}`,
       onclick: () => alternar(habito, dia),
     },
@@ -362,6 +380,7 @@ function render(raiz) {
       ),
     ),
   );
+  recemMarcada = null; // a animação é só do desenho logo depois do toque
 }
 
 export const habitos = {

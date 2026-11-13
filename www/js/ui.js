@@ -293,3 +293,16 @@ export function avisar(texto) {
   document.body.append(el);
   setTimeout(() => el.remove(), 4000);
 }
+
+// Resposta tátil: um toque curto ao marcar, dois pulsos ao concluir.
+// Só vibra onde o aparelho tem motor e o app tem permissão (no Android, VIBRATE);
+// nos outros lugares a chamada não faz nada.
+const VIBRACAO = { toque: 8, concluido: [12, 70, 22] };
+
+export function vibrar(tipo) {
+  try {
+    navigator.vibrate?.(VIBRACAO[tipo]);
+  } catch {
+    /* sem vibração neste aparelho */
+  }
+}

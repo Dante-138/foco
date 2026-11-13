@@ -543,11 +543,88 @@ ul {
 }
 
 .cel {
+  position: relative;
   display: grid;
   place-items: center;
   align-content: center;
   height: 44px;
   color: var(--cor);
+}
+
+/* Resposta ao toque. Qualquer marca nova dá um pulo curto; cumprir o hábito ganha um
+   pulo maior, uma onda na cor do hábito e um pulso no anel de progresso da linha. */
+.cel.marcou > * {
+  animation: marca-pulo 0.16s ease-out;
+}
+
+.cel.concluiu > * {
+  animation: marca-concluiu 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.cel.concluiu::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 2px solid var(--cor);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  animation: marca-onda 0.5s ease-out;
+}
+
+.anel.pulsa {
+  animation: anel-pulso 0.5s ease-out;
+}
+
+@keyframes marca-pulo {
+  from {
+    transform: scale(0.6);
+  }
+}
+
+@keyframes marca-concluiu {
+  0% {
+    transform: scale(0.3);
+  }
+
+  55% {
+    transform: scale(1.4);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes marca-onda {
+  from {
+    transform: scale(0.35);
+    opacity: 0.75;
+  }
+
+  to {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes anel-pulso {
+  45% {
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cel.marcou > *,
+  .cel.concluiu > *,
+  .cel.concluiu::after,
+  .anel.pulsa {
+    animation: none;
+  }
 }
 
 .cel:active {
@@ -657,9 +734,38 @@ ul {
   color: var(--estrela);
 }
 
-.tarefa.feita .tarefa-titulo {
+.tarefa.feita .tarefa-titulo,
+.tarefa.concluindo .tarefa-titulo {
   color: var(--texto-2);
   text-decoration: line-through;
+}
+
+/* Concluir uma tarefa: o círculo vira a marca, o título é riscado e a linha se recolhe.
+   A altura de partida é fixada pelo código (tarefas.js) para a transição ter de onde sair. */
+.tarefa.concluindo {
+  overflow: hidden;
+  transition:
+    height 0.22s ease-in,
+    opacity 0.2s ease-in;
+}
+
+.tarefa.concluindo .tarefa-check .icone {
+  animation: marca-concluiu 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.tarefa.saindo {
+  height: 0 !important; /* vence a altura fixada em linha pelo código */
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tarefa.concluindo {
+    transition: none;
+  }
+
+  .tarefa.concluindo .tarefa-check .icone {
+    animation: none;
+  }
 }
 
 .concluidas-topo {

@@ -213,6 +213,35 @@ test('hábito numérico: aceita milhar no costume brasileiro e recusa texto que 
   assert.deepEqual(erros, []);
 });
 
+test('hábito: cumprir destaca a célula e o anel; as outras marcas só dão o pulo curto', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const classes = (alvo) => alvo.evaluate((el) => [...el.classList]);
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+
+  await botao(pagina, 'Leitura, hoje: não feito').click();
+  const feita = botao(pagina, 'Leitura, hoje: feito');
+  await visivel(feita);
+  assert.ok((await classes(feita)).includes('concluiu'));
+  assert.equal(await pagina.locator('.anel.pulsa').count(), 1);
+
+  await feita.click();
+  const pulada = botao(pagina, 'Leitura, hoje: pulado');
+  await visivel(pulada);
+  assert.ok((await classes(pulada)).includes('marcou'));
+  assert.ok(!(await classes(pulada)).includes('concluiu'));
+  assert.equal(await pagina.locator('.anel.pulsa').count(), 0);
+
+  // Um redesenho que não veio de um toque (aqui, a largura da tela mudou) não repete a animação.
+  await pagina.setViewportSize({ width: 640, height: 1000 });
+  await pagina.waitForFunction(() => !document.querySelector('.cel.marcou, .cel.concluiu'), null, ESPERA);
+  await visivel(pulada);
+  assert.deepEqual(erros, []);
+});
+
 // ------------------------------------------------------------------- tarefas
 
 test('tarefa: cria com prazo de hoje, marca estrela, conclui e reabre', async (t) => {
@@ -238,6 +267,41 @@ test('tarefa: cria com prazo de hoje, marca estrela, conclui e reabre', async (t
 
   await pagina.getByRole('checkbox', { name: 'Reabrir: Estudar para a prova' }).click();
   await visivel(pagina.getByText('1 pendente', { exact: true }));
+  assert.deepEqual(erros, []);
+});
+
+test('tarefa: ao concluir, a linha mostra a marca e o risco antes de sair da lista', async (t) => {
+  const { pagina, erros } = await abrir(t);
+
+  await botao(pagina, 'Tarefas').click();
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Pagar o boleto');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByText('1 pendente', { exact: true }));
+
+  // O toque e a leitura acontecem no mesmo passo, para ver a tela logo depois do toque.
+  const logoDepois = await pagina.evaluate((chave) => {
+    const check = document.querySelector('.tarefa-check');
+    check.click();
+    const linha = check.closest('.tarefa');
+    return {
+      naTela: linha.isConnected,
+      classes: [...linha.classList],
+      marcado: check.getAttribute('aria-checked'),
+      salvaComoFeita: JSON.parse(localStorage.getItem(chave)).tarefas[0].feita,
+    };
+  }, CHAVE);
+  assert.deepEqual(logoDepois, {
+    naTela: true,
+    classes: ['tarefa', 'concluindo'],
+    marcado: 'true',
+    salvaComoFeita: true,
+  });
+
+  // Depois da animação a lista é redesenhada e a tarefa passa para as concluídas.
+  await visivel(pagina.getByText('0 pendentes', { exact: true }));
+  await visivel(botao(pagina, 'Concluídas (1)'));
+  assert.equal(await pagina.locator('.tarefa.concluindo').count(), 0);
   assert.deepEqual(erros, []);
 });
 

@@ -6,17 +6,40 @@ import { uid } from './nucleo/ids.js';
 import { hoje, somaDias } from './nucleo/datas.js';
 import { LIMITES, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
 import { agrupar, rotuloData } from './nucleo/prazos.js';
-import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
+import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
 
 let concluidasAbertas = false;
 
+// Tempo da resposta ao concluir: a marca aparece, a linha se recolhe e só então a lista é redesenhada.
+const MOSTRAR_MARCA_MS = 380;
+const RECOLHER_MS = 240;
+let esperaRedesenho = null;
+
 // ---------------------------------------------------------------- ações
 
-function alternarFeita(tarefa) {
+function alternarFeita(tarefa, check) {
   tarefa.feita = !tarefa.feita;
   tarefa.feitaEm = tarefa.feita ? Date.now() : null;
   salvar();
-  redesenhar();
+
+  const linhaNaTela = check.closest('.tarefa');
+  if (!tarefa.feita) {
+    redesenhar(); // reabrir é imediato
+    return;
+  }
+
+  // Concluir: a tarefa já está salva como feita. A linha fica um instante na tela,
+  // com a marca e o título riscado, e se recolhe; antes ela simplesmente sumia.
+  vibrar('concluido');
+  check.replaceChildren(icone('check'));
+  check.setAttribute('aria-checked', 'true');
+  linhaNaTela.style.setProperty('height', `${linhaNaTela.offsetHeight}px`);
+  linhaNaTela.classList.add('concluindo');
+  setTimeout(() => linhaNaTela.classList.add('saindo'), MOSTRAR_MARCA_MS);
+
+  // Um só redesenho, depois da última conclusão: tocar em várias seguidas não corta a animação.
+  clearTimeout(esperaRedesenho);
+  esperaRedesenho = setTimeout(redesenhar, MOSTRAR_MARCA_MS + RECOLHER_MS);
 }
 
 function alternarEstrela(tarefa) {
@@ -239,7 +262,7 @@ function linha(tarefa, { atrasada = false, mostrarLista = false } = {}) {
         role: 'checkbox',
         'aria-checked': String(tarefa.feita),
         'aria-label': `${tarefa.feita ? 'Reabrir' : 'Concluir'}: ${tarefa.titulo}`,
-        onclick: () => alternarFeita(tarefa),
+        onclick: (e) => alternarFeita(tarefa, e.currentTarget),
       },
       tarefa.feita ? icone('check') : h('span', { class: 'circulo' }),
     ),
