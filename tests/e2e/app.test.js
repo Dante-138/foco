@@ -511,6 +511,45 @@ test('rotina: "Excluir itens marcados" e "Desmarcar todos" no menu, como no Keep
   assert.deepEqual(erros, []);
 });
 
+test('rotina: fazer uma cópia (sem as marcas do dia) e mover a rotina na faixa', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const nomes = async () => (await pagina.locator('.faixa .chip').allTextContents()).slice(0, -1); // o último é "Nova rotina"
+  const menu = async (rotulo) => {
+    await botao(pagina, 'Opções da rotina').click();
+    await botao(pagina, rotulo).click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+
+  await criarRotinaDaManha(pagina);
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+
+  await menu('Fazer uma cópia');
+  await visivel(pagina.getByRole('heading', { name: 'Manhã (cópia)' }));
+  await visivel(pagina.getByText('0 de 4 hoje')); // a cópia nasce sem marcas
+  assert.deepEqual(await nomes(), ['Manhã', 'Manhã (cópia)']);
+  const [original, copia] = JSON.parse(await lerSalvo(pagina, CHAVE)).rotinas;
+  assert.deepEqual(
+    copia.itens.map((i) => [i.tipo, i.texto]),
+    original.itens.map((i) => [i.tipo, i.texto]),
+  );
+  assert.equal(
+    copia.itens.some((i) => original.itens.some((o) => o.id === i.id)),
+    false,
+  );
+
+  await menu('Mover para a esquerda');
+  assert.deepEqual(await nomes(), ['Manhã (cópia)', 'Manhã']);
+  await botao(pagina, 'Opções da rotina').click();
+  assert.equal(await botao(pagina, 'Mover para a esquerda').isDisabled(), true);
+  await pagina.keyboard.press('Escape');
+
+  // A original continua com a marca de hoje.
+  await pagina.locator('.faixa .chip', { hasText: /^Manhã$/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.deepEqual(erros, []);
+});
+
 test('rotina: a caixa da seção marca e desmarca o bloco inteiro, e o desfazer volta o bloco de uma vez', async (t) => {
   const { pagina, erros } = await abrir(t);
   const itens = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
