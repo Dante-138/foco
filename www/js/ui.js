@@ -312,6 +312,45 @@ export function avisar(texto) {
   setTimeout(() => el.remove(), 4000);
 }
 
+// Segurar o dedo (ou o botão do mouse) sobre o elemento chama "acao", e o clique que
+// viria ao soltar não acontece. Rolar a tela ou tirar o dedo antes do tempo cancela.
+// O menu do sistema (long press no Android, botão direito no computador) também chama.
+const TEMPO_DE_SEGURAR_MS = 550;
+
+export function aoSegurar(elemento, acao) {
+  let espera = null;
+  let disparou = false;
+  const cancelar = () => clearTimeout(espera);
+  const disparar = () => {
+    if (disparou) return;
+    disparou = true;
+    cancelar();
+    vibrar('toque');
+    acao();
+  };
+  elemento.addEventListener('pointerdown', () => {
+    disparou = false;
+    cancelar();
+    espera = setTimeout(disparar, TEMPO_DE_SEGURAR_MS);
+  });
+  for (const tipo of ['pointerup', 'pointerleave', 'pointercancel'])
+    elemento.addEventListener(tipo, cancelar);
+  elemento.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    disparar();
+  });
+  // Depois de segurar, o clique ao soltar não vale (fase de captura: roda antes do onclick).
+  elemento.addEventListener(
+    'click',
+    (e) => {
+      if (!disparou) return;
+      disparou = false;
+      e.stopImmediatePropagation();
+    },
+    { capture: true },
+  );
+}
+
 // Resposta tátil: um toque curto ao marcar, dois pulsos ao concluir.
 // Só vibra onde o aparelho tem motor e o app tem permissão (no Android, VIBRATE);
 // nos outros lugares a chamada não faz nada.

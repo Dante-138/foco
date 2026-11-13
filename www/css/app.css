@@ -665,6 +665,9 @@ ul {
 
 .cel {
   position: relative;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none; /* segurar abre a nota, não o menu do sistema */
   display: grid;
   place-items: center;
   align-content: center;
@@ -746,6 +749,18 @@ ul {
   .anel.pulsa {
     animation: none;
   }
+}
+
+/* Dia com nota: um ponto pequeno no canto da célula, na cor do hábito, como no Loop. */
+.cel.com-nota::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cor);
 }
 
 .cel:active {

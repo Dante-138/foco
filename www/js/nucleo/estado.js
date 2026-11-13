@@ -20,6 +20,7 @@ export function estadoInicial({ dia, gerarId }) {
     marcadosNoFim: true,
     habitos: [],
     registros: {},
+    notasHabito: {},
     ocultarConcluidos: false,
     ocultarArquivados: true,
     listas: [lista],
