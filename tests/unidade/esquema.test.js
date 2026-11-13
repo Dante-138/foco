@@ -61,6 +61,7 @@ function valido() {
         notas: 'Capítulos 1 a 3',
         prazo: '2026-11-26',
         hora: '19:30',
+        repeticao: { cada: 2, unidade: 'semana' },
         estrela: true,
         feita: false,
         criadaEm: 1000,
@@ -73,6 +74,7 @@ function valido() {
         notas: '',
         prazo: null,
         hora: null,
+        repeticao: null,
         estrela: false,
         feita: true,
         criadaEm: 2000,
@@ -374,6 +376,7 @@ test('tarefa: cada campo inválido recebe um valor seguro', () => {
       notas: '',
       prazo: null,
       hora: null,
+      repeticao: null,
       estrela: false,
       feita: false,
       criadaEm: 0,
@@ -484,6 +487,28 @@ test('tarefa: horário só vale no formato HH:MM e junto de um prazo', () => {
       ['hora-que-nao-e-texto', '2026-11-26', null],
       ['sem-prazo', null, null],
       ['sem-hora', '2026-11-26', null],
+    ],
+  );
+});
+
+test('tarefa: repetição só vale bem formada e junto de um prazo; campos a mais são descartados', () => {
+  const tarefa = (id, prazo, repeticao) => ({ id, listaId: 'l1', titulo: id, prazo, repeticao });
+  const { estado } = limpar({
+    listas: [{ id: 'l1', nome: 'L' }],
+    tarefas: [
+      tarefa('boa', '2026-11-26', { cada: 2, unidade: 'semana', lixo: 1 }),
+      tarefa('unidade-errada', '2026-11-26', { cada: 1, unidade: 'quinzena' }),
+      tarefa('sem-prazo', null, { cada: 1, unidade: 'dia' }),
+      tarefa('texto', '2026-11-26', 'toda semana'),
+    ],
+  });
+  assert.deepEqual(
+    estado.tarefas.map((t) => [t.id, t.repeticao]),
+    [
+      ['boa', { cada: 2, unidade: 'semana' }],
+      ['unidade-errada', null],
+      ['sem-prazo', null],
+      ['texto', null],
     ],
   );
 });

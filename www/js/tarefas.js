@@ -6,6 +6,7 @@ import { uid } from './nucleo/ids.js';
 import { hoje, somaDias } from './nucleo/datas.js';
 import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
 import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
+import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
 import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
 
 let concluidasAbertas = false;
@@ -17,9 +18,24 @@ let esperaRedesenho = null;
 
 // ---------------------------------------------------------------- ações
 
+// Tarefa que se repete: ao concluir, nasce a próxima ocorrência, e a série segue nela.
+// A concluída fica no histórico sem a repetição, para reabrir não criar outra série.
+function criarProximaOcorrencia(tarefa) {
+  estado.tarefas.push({
+    ...tarefa,
+    id: uid(),
+    prazo: proximaData(tarefa.prazo, tarefa.repeticao, hoje()),
+    feita: false,
+    feitaEm: null,
+    criadaEm: Date.now(),
+  });
+  tarefa.repeticao = null;
+}
+
 function alternarFeita(tarefa, check) {
   tarefa.feita = !tarefa.feita;
   tarefa.feitaEm = tarefa.feita ? Date.now() : null;
+  if (tarefa.feita && tarefa.repeticao) criarProximaOcorrencia(tarefa);
   salvar();
 
   const linhaNaTela = check.closest('.tarefa');
@@ -48,6 +64,53 @@ function alternarEstrela(tarefa) {
   redesenhar();
 }
 
+// Campos de repetição do formulário da tarefa: a unidade ("Não repete", dias, semanas...)
+// e de quantas em quantas. O segundo só aparece quando a tarefa repete.
+function camposDeRepeticao(tarefa) {
+  const unidade = h(
+    'select',
+    { class: 'entrada' },
+    [
+      ['', 'Não repete'],
+      ['dia', 'Dias'],
+      ['semana', 'Semanas'],
+      ['mes', 'Meses'],
+      ['ano', 'Anos'],
+    ].map(([valor, rotulo]) => h('option', { value: valor }, rotulo)),
+  );
+  unidade.value = tarefa?.repeticao?.unidade ?? '';
+  const cada = h('input', {
+    class: 'entrada',
+    type: 'number',
+    inputMode: 'numeric',
+    min: 1,
+    max: MAXIMO_DE_INTERVALOS,
+    value: String(tarefa?.repeticao?.cada ?? 1),
+  });
+  const campoCada = campo('A cada', cada);
+  const mostrarCada = () => {
+    campoCada.hidden = !unidade.value;
+  };
+  unidade.addEventListener('change', mostrarCada);
+  mostrarCada();
+
+  return {
+    campoUnidade: campo('Repetir', unidade),
+    campoCada,
+    limpar() {
+      unidade.value = '';
+      mostrarCada();
+    },
+    // Devolve { cada, unidade } ou null. Número fora da faixa é trazido para dentro dela.
+    ler() {
+      if (!unidade.value) return null;
+      const n = Number.parseInt(cada.value, 10);
+      const vezes = Math.min(Math.max(Number.isInteger(n) ? n : 1, 1), MAXIMO_DE_INTERVALOS);
+      return { cada: vezes, unidade: unidade.value };
+    },
+  };
+}
+
 function editarTarefa(tarefa) {
   const naEstrela = estado.listaAtiva === ESTRELA;
   const listaPadrao = tarefa?.listaId ?? (naEstrela ? estado.listas[0].id : estado.listaAtiva);
@@ -70,6 +133,8 @@ function editarTarefa(tarefa) {
   });
   const prazo = h('input', { class: 'entrada', type: 'date', value: tarefa?.prazo ?? '' });
   const hora = h('input', { class: 'entrada', type: 'time', value: tarefa?.hora ?? '' });
+
+  const repetir = camposDeRepeticao(tarefa);
   const lista = h(
     'select',
     { class: 'entrada' },
@@ -85,7 +150,11 @@ function editarTarefa(tarefa) {
         class: 'chip',
         onclick: () => {
           prazo.value = valor;
-          if (!valor) hora.value = ''; // sem data não há horário
+          if (!valor) {
+            // sem data não há horário nem repetição
+            hora.value = '';
+            repetir.limpar();
+          }
         },
       },
       rotulo,
@@ -100,12 +169,14 @@ function editarTarefa(tarefa) {
       return;
     }
 
+    const repeticao = repetir.ler();
     const dados = {
       titulo: tituloFinal,
       notas: notas.value.trim(),
-      // Horário sem data vale para hoje, como no Google Tasks.
-      prazo: prazo.value || (hora.value ? hoje() : null),
+      // Horário ou repetição sem data valem a partir de hoje, como no Google Tasks.
+      prazo: prazo.value || (hora.value || repeticao ? hoje() : null),
       hora: hora.value || null,
+      repeticao,
       // Sem opção selecionada (lista da tarefa não existe mais), cai na primeira lista.
       listaId: lista.value || estado.listas[0].id,
     };
@@ -149,6 +220,7 @@ function editarTarefa(tarefa) {
         atalho('Amanhã', somaDias(hoje(), 1)),
         atalho('Sem data', ''),
       ),
+      h('div', { class: 'dupla' }, repetir.campoUnidade, repetir.campoCada),
       estado.listas.length > 1 ? campo('Lista', lista) : null,
       h(
         'div',
@@ -285,7 +357,11 @@ function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = fals
   const detalhes = [];
   // Data e horário em uma linha só: "sex., 13 de nov., 14:30", só "14:30" quando o grupo já diz o dia.
   const mostrarData = Boolean(tarefa.prazo) && (atrasada || tarefa.feita || comPrazo);
-  const quando = [mostrarData ? rotuloData(tarefa.prazo, hoje()) : null, tarefa.hora]
+  const quando = [
+    mostrarData ? rotuloData(tarefa.prazo, hoje()) : null,
+    tarefa.hora,
+    tarefa.repeticao ? `repete ${descrever(tarefa.repeticao)}` : null,
+  ]
     .filter(Boolean)
     .join(', ');
   if (quando) detalhes.push(h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, quando));

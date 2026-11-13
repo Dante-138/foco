@@ -569,6 +569,49 @@ test('tarefa com horário: aparece na linha, ordena o dia pelo relógio e vale p
   assert.deepEqual(erros, []);
 });
 
+test('tarefa que se repete: ao concluir, a próxima ocorrência aparece na data seguinte', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const salvas = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas;
+  const dias = (de, ate) => Math.round((new Date(ate) - new Date(de)) / 86_400_000);
+
+  await botao(pagina, 'Tarefas').click();
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Regar as plantas');
+  assert.equal(await pagina.getByLabel('A cada').isVisible(), false); // só aparece quando repete
+  await pagina.getByLabel('Repetir').selectOption('semana');
+  await pagina.getByLabel('A cada').fill('2');
+  await botao(pagina, 'Salvar').click();
+
+  // Repetição sem data começa hoje, e a linha diz de quanto em quanto tempo.
+  await visivel(pagina.getByRole('heading', { name: 'Hoje', exact: true }));
+  await visivel(pagina.getByText('repete a cada 2 semanas'));
+  const [original] = await salvas();
+  assert.deepEqual(original.repeticao, { cada: 2, unidade: 'semana' });
+
+  await pagina.getByRole('checkbox', { name: 'Concluir: Regar as plantas' }).click();
+  await visivel(botao(pagina, 'Concluídas (1)'));
+  await visivel(pagina.getByText('1 pendente', { exact: true }));
+  assert.equal(await pagina.getByRole('heading', { name: 'Hoje', exact: true }).count(), 0);
+
+  const depois = await salvas();
+  assert.equal(depois.length, 2);
+  const feita = depois.find((x) => x.feita);
+  const proxima = depois.find((x) => !x.feita);
+  assert.equal(feita.repeticao, null); // a série segue só na ocorrência nova
+  assert.deepEqual(proxima.repeticao, { cada: 2, unidade: 'semana' });
+  assert.equal(proxima.titulo, 'Regar as plantas');
+  assert.equal(dias(original.prazo, proxima.prazo), 14);
+  assert.notEqual(proxima.id, feita.id);
+
+  // Tirar a data na edição tira também a repetição.
+  await pagina.locator('.tarefa-corpo', { hasText: 'Regar as plantas' }).first().click();
+  await botao(pagina, 'Sem data').click();
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
+  assert.equal((await salvas()).find((x) => !x.feita).repeticao, null);
+  assert.deepEqual(erros, []);
+});
+
 test('tarefas: excluir concluídas apaga só as concluídas da lista, depois de confirmar', async (t) => {
   const tarefa = (id, listaId, titulo, feita) => ({
     id,

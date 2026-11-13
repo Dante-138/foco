@@ -29,6 +29,7 @@ function comDados() {
         notas: '',
         prazo: '2026-11-26',
         hora: '08:00',
+        repeticao: { cada: 1, unidade: 'mes' },
         estrela: false,
         feita: false,
         criadaEm: 1,
