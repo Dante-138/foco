@@ -8,13 +8,15 @@ import { h, icone, avisar, estadoVazio } from './ui.js';
 import { rotinas } from './rotinas.js';
 import { habitos } from './habitos.js';
 import { tarefas } from './tarefas.js';
+import { painel } from './painel.js';
 import { aplicarTema } from './tema.js';
 import { abrirAjustes } from './ajustes.js';
 import { agendarSincronia } from './lembretes.js';
 
 // Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
 // flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
-const ABAS = [rotinas, habitos, tarefas];
+// Ordem da barra de abas e do deslize. O app abre na última aba usada.
+const ABAS = [painel, rotinas, habitos, tarefas];
 
 const titulo = document.getElementById('titulo');
 const conteudo = document.getElementById('conteudo');
@@ -137,6 +139,8 @@ function iniciar() {
   fab.append(icone('mais', { tam: 28 }));
   fab.addEventListener('click', () => abaAtual().aoAdicionar());
   fabSecundario.addEventListener('click', () => acaoSecundaria?.());
+  // O painel leva para a aba de cada coisa.
+  document.addEventListener('foco:ir-para-aba', (e) => irParaAba(e.detail));
 
   botaoAjustes.append(icone('ajustes'));
   botaoAjustes.addEventListener('click', abrirAjustes);
