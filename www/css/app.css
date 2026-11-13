@@ -571,6 +571,27 @@ ul {
   border-bottom-color: var(--acento);
 }
 
+/* Alça de arrastar: o dedo nela move a linha em vez de rolar a lista. */
+.alca {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 40px;
+  margin-left: -8px;
+  color: var(--texto-3);
+  cursor: grab;
+  touch-action: none;
+}
+
+.edicao li.arrastando {
+  position: relative;
+  z-index: 3;
+  border-radius: 10px;
+  background: var(--sup-2);
+  box-shadow: 0 4px 14px var(--sombra);
+}
+
 .campo-hora {
   flex: none;
   width: 92px;
