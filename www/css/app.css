@@ -711,6 +711,21 @@ ul {
   color: var(--perigo);
 }
 
+/* Grupos por data: um respiro maior entre um dia e outro. O de hoje ganha o título
+   na cor de destaque e um pouco mais de espaço em volta, como no Google Tasks. */
+.cartao.grupo {
+  margin-bottom: 14px;
+}
+
+.grupo.hoje {
+  margin-top: 18px;
+  margin-bottom: 22px;
+}
+
+.grupo.hoje .grupo-titulo {
+  color: var(--acento);
+}
+
 .tarefa {
   display: flex;
   align-items: flex-start;

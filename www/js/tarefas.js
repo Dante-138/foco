@@ -336,7 +336,7 @@ function cartoesDasPendentes(pendentes, naEstrela) {
     return agrupar(pendentes, diaHoje).map((g) =>
       h(
         'section',
-        { class: `cartao grupo${g.atrasado ? ' atrasado' : ''}` },
+        { class: `cartao grupo${g.atrasado ? ' atrasado' : ''}${g.chave === 'hoje' ? ' hoje' : ''}` },
         h('h3', { class: 'grupo-titulo' }, g.rotulo),
         h(
           'ul',
