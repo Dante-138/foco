@@ -46,10 +46,27 @@ export const emEdicao = (rotina) => Boolean(rotina) && editando === rotina.id;
 
 // O texto é guardado enquanto se digita, com uma pequena espera entre as gravações.
 let espera = null;
-function salvarLogo() {
+let pendente = false;
+
+function gravarPendente() {
   clearTimeout(espera);
-  espera = setTimeout(salvar, 500);
+  if (!pendente) return;
+  pendente = false;
+  salvar();
 }
+
+function salvarLogo() {
+  pendente = true;
+  clearTimeout(espera);
+  espera = setTimeout(gravarPendente, 500);
+}
+
+// O Android pode encerrar o app logo depois de ele ir para o fundo: o que foi digitado
+// e ainda esperava a gravação é gravado na hora.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) gravarPendente();
+});
+window.addEventListener('pagehide', gravarPendente);
 
 const novoItem = (tipo) => ({ id: uid(), tipo, texto: '', hora: null, habitoId: null });
 
@@ -81,6 +98,7 @@ export function sairDaEdicao(rotina) {
   editando = null;
   focarEm = null;
   clearTimeout(espera);
+  pendente = false;
   rotina.nome = rotina.nome.trim().slice(0, LIMITES.nomeRotina).trim() || 'Rotina';
   rotina.itens = limparVazios(rotina.itens, LIMITES.textoItem);
   salvar();
