@@ -18,6 +18,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   semanas, meses ou anos.
 - **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
   às 9h quando só tem a data.
+- **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
+  tarefas de hoje. Marca item e conclui tarefa ali mesmo.
 - **Gestos**: deslizar o dedo para o lado troca de aba.
 - **Tema**: escuro (padrão), claro ou o do sistema, em Ajustes.
 - **Backup**: em Ajustes, copiar todos os dados como texto e restaurar colando esse texto.
@@ -116,6 +118,7 @@ www/js/nucleo/          lógica pura: roda sem navegador, não toca DOM nem arma
   lembretes.js          plano de notificações das tarefas com prazo
   habito-calculo.js     leitura de números, metas, pontuação, sequências e filtros
   gesto.js              deslize do dedo para trocar de aba
+  painel.js             resumo do dia para a aba Painel
   datas.js              datas no fuso local
   paleta.js             cores dos hábitos
   ids.js                identificadores

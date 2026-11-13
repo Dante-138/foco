@@ -6,7 +6,7 @@
 //
 // estado = {
 //   versao:       número (sempre a versão atual)
-//   aba:          'rotinas' | 'habitos' | 'tarefas'
+//   aba:          'rotinas' | 'habitos' | 'tarefas' | 'painel'
 //   rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null,
 //                    habitoId: id de um hábito existente | null (marcar o item marca o hábito) }] }]
 //   rotinaAtiva:  id de uma rotina existente | null
@@ -52,7 +52,8 @@ export const LIMITES = Object.freeze({
   notaHabito: 300,
 });
 
-export const ABAS = Object.freeze(['rotinas', 'habitos', 'tarefas']);
+// A primeira é a padrão. A ordem na barra de abas é a de js/app.js.
+export const ABAS = Object.freeze(['rotinas', 'habitos', 'tarefas', 'painel']);
 export const VISAO_ESTRELA = 'estrela'; // valor de listaAtiva para a visão "com estrela"
 export const NOME_LISTA_PADRAO = 'Minhas tarefas';
 // Ordens da lista de tarefas; a primeira é a padrão. A ordenação em si está em prazos.js.

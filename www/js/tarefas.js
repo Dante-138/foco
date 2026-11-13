@@ -33,6 +33,17 @@ function criarProximaOcorrencia(tarefa) {
   tarefa.repeticao = null;
 }
 
+// Concluir sem a animação da lista: usado pelo painel. Tarefa que se repete gera a próxima.
+export function concluirTarefa(tarefa) {
+  if (tarefa.feita) return;
+  tarefa.feita = true;
+  tarefa.feitaEm = Date.now();
+  if (tarefa.repeticao) criarProximaOcorrencia(tarefa);
+  vibrar('concluido');
+  salvar();
+  redesenhar();
+}
+
 function alternarFeita(tarefa, check) {
   tarefa.feita = !tarefa.feita;
   tarefa.feitaEm = tarefa.feita ? Date.now() : null;

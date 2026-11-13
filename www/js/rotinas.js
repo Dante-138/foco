@@ -626,6 +626,9 @@ function render(raiz) {
   faixa.querySelector('.chip.ativo')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
+// O painel marca itens da rotina pelo mesmo caminho da aba (marca, hábito ligado e desfazer).
+export { alternarItem as alternarItemDaRotina };
+
 const rotinaAtiva = () => estado.rotinas.find((r) => r.id === estado.rotinaAtiva) ?? estado.rotinas[0];
 
 export const rotinas = {
