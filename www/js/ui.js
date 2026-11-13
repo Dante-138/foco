@@ -85,6 +85,12 @@ const ICONES = {
     ['circle', { cx: 15, cy: 7, r: 2.5 }],
     ['circle', { cx: 9, cy: 17, r: 2.5 }],
   ],
+  painel: [
+    ['rect', { x: 4, y: 4, width: 7, height: 7, rx: 2 }],
+    ['rect', { x: 13, y: 4, width: 7, height: 7, rx: 2 }],
+    ['rect', { x: 4, y: 13, width: 7, height: 7, rx: 2 }],
+    ['rect', { x: 13, y: 13, width: 7, height: 7, rx: 2 }],
+  ],
   rotinas: [
     ['circle', { cx: 12, cy: 12, r: 8.5 }],
     ['path', { d: 'M12 7.5V12l3 2' }],
