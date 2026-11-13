@@ -183,7 +183,7 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
 
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 4);
+  assert.equal(salvo.versao, 5);
   assert.deepEqual(
     salvo.rotinas[0].itens.map((i) => [i.tipo, i.hora, i.texto]),
     [
@@ -518,6 +518,42 @@ test('hábito: a edição mostra a pontuação e as sequências, e o anel acompa
   );
   await botao(pagina, 'Editar Leitura').click();
   await visivel(pagina.getByText(/Sequência atual: 1 dia\. Melhor: 1 dia\./));
+  assert.deepEqual(erros, []);
+});
+
+test('hábito: segurar a célula abre a nota do dia, sem mudar a marca; o ponto mostra que há nota', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const segurar = (alvo) => alvo.click({ delay: 800 });
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+
+  await segurar(botao(pagina, 'Leitura, hoje: não feito'));
+  await visivel(pagina.getByText('Nota: Leitura (hoje)'));
+  await pagina.getByLabel('Nota do dia').fill('  Dia de viagem  ');
+  await botao(pagina, 'Salvar').click();
+
+  // A marca continua a mesma; a célula ganha o ponto e diz que tem nota.
+  const comNota = botao(pagina, 'Leitura, hoje: não feito, com nota');
+  await visivel(comNota);
+  assert.ok((await comNota.evaluate((el) => [...el.classList])).includes('com-nota'));
+  const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
+  assert.deepEqual(Object.values(salvo.notasHabito[salvo.habitos[0].id]), ['Dia de viagem']);
+  assert.equal(salvo.registros[salvo.habitos[0].id], undefined);
+
+  // O toque normal continua marcando, e a nota fica.
+  await comNota.click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito, com nota'));
+
+  // Depois de recarregar, a nota volta; excluir tira o ponto.
+  await recarregar(pagina);
+  await segurar(botao(pagina, 'Leitura, hoje: feito, com nota'));
+  assert.equal(await pagina.getByLabel('Nota do dia').inputValue(), 'Dia de viagem');
+  await botao(pagina, 'Excluir nota').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  assert.deepEqual(JSON.parse(await lerSalvo(pagina, CHAVE)).notasHabito, {});
   assert.deepEqual(erros, []);
 });
 

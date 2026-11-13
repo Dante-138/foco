@@ -46,6 +46,7 @@ function valido() {
       { id: 'h2', nome: 'Água', cor: 'azul', tipo: 'numero', unidade: 'copos', meta: 2, arquivado: true },
     ],
     registros: { h1: { '2026-11-12': 'feito', '2026-11-11': 'pulado' }, h2: { '2026-11-12': 1.5 } },
+    notasHabito: { h1: { '2026-11-11': 'Viagem, sem livro' } },
     ocultarConcluidos: true,
     ocultarArquivados: false,
     listas: [
@@ -110,6 +111,7 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     marcadosNoFim: true,
     habitos: [],
     registros: {},
+    notasHabito: {},
     ocultarConcluidos: false,
     ocultarArquivados: true,
     listas: [{ id: 'id-gerado', nome: 'Minhas tarefas' }],
@@ -550,4 +552,34 @@ test('lembretes: só o valor falso desliga; qualquer outro vale o padrão, ligad
     assert.equal(limpar({ lembretes: valor }).estado.lembretes, true);
   }
   assert.equal(limpar({ lembretes: false }).estado.lembretes, false);
+});
+
+test('notas dos hábitos: só de hábito existente, com data real e texto; vazia some sem aviso', () => {
+  const { estado, avisos } = limpar({
+    habitos: [{ id: 'h', nome: 'H', cor: 'azul', tipo: 'simnao' }],
+    notasHabito: {
+      h: {
+        '2026-11-10': '  Viagem  ',
+        '2026-11-11': '   ',
+        '2026-02-30': 'data que não existe',
+        '2026-11-12': 42,
+        '2026-11-09': 'x'.repeat(LIMITES.notaHabito + 10),
+      },
+      excluido: { '2026-11-10': 'de hábito que não existe' },
+      vazio: 'não é objeto',
+    },
+  });
+  assert.deepEqual(estado.notasHabito, {
+    h: { '2026-11-10': 'Viagem', '2026-11-09': 'x'.repeat(LIMITES.notaHabito) },
+  });
+  assert.equal(avisos.length, 1); // um aviso pelo hábito com entradas inválidas
+
+  for (const errado of [undefined, null, 'texto', [], 7]) {
+    assert.deepEqual(limpar({ notasHabito: errado }).estado.notasHabito, {});
+  }
+  assert.deepEqual(
+    limpar({ habitos: [{ id: 'h', nome: 'H', cor: 'azul' }], notasHabito: { h: { '2026-11-11': ' ' } } })
+      .estado.notasHabito,
+    {},
+  );
 });
