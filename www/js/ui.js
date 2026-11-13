@@ -279,10 +279,12 @@ export function campo(rotulo, entrada) {
   return h('label', { class: 'rotulo' }, rotulo, entrada);
 }
 
-export function estadoVazio(titulo, dica) {
+// compacto: quando há mais conteúdo logo abaixo (a seção de concluídas), a mensagem
+// ocupa só o espaço dela em vez de ficar no meio da tela.
+export function estadoVazio(titulo, dica, { compacto = false } = {}) {
   return h(
     'div',
-    { class: 'sem-conteudo' },
+    { class: `sem-conteudo${compacto ? ' compacto' : ''}` },
     h('p', { class: 'sem-conteudo-titulo' }, titulo),
     h('p', {}, dica),
   );

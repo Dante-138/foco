@@ -374,6 +374,11 @@ ul {
   color: var(--texto-2);
 }
 
+/* Com conteúdo logo abaixo (a seção de concluídas), a mensagem não vai para o meio da tela. */
+.sem-conteudo.compacto {
+  padding: 40px 32px 32px;
+}
+
 .sem-conteudo-titulo {
   margin-bottom: 6px;
   font-size: 17px;

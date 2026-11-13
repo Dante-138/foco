@@ -354,6 +354,7 @@ function render(raiz) {
         : estadoVazio(
             concluidas.length ? 'Tudo concluído' : 'Nenhuma tarefa aqui',
             'Toque em + para adicionar uma tarefa.',
+            { compacto: concluidas.length > 0 },
           ),
     );
   }

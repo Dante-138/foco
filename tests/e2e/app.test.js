@@ -244,6 +244,48 @@ test('hábito: cumprir destaca a célula e o anel; as outras marcas só dão o p
 
 // ------------------------------------------------------------------- tarefas
 
+test('tarefas: lista só com concluídas mostra a mensagem no alto, com folga até as concluídas', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 2,
+    aba: 'tarefas',
+    listas: [
+      { id: 'feitas', nome: 'Feitas' },
+      { id: 'vazia', nome: 'Vazia' },
+    ],
+    listaAtiva: 'feitas',
+    tarefas: [
+      {
+        id: 't1',
+        listaId: 'feitas',
+        titulo: 'Pagar o boleto',
+        notas: '',
+        prazo: null,
+        estrela: false,
+        feita: true,
+        criadaEm: 1,
+        feitaEm: 2,
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+
+  await visivel(pagina.getByText('Tudo concluído'));
+  await visivel(botao(pagina, 'Concluídas (1)'));
+  const medidas = await pagina.evaluate(() => {
+    const dica = document.querySelector('.sem-conteudo.compacto p:last-child').getBoundingClientRect();
+    const concluidas = document.querySelector('.concluidas-topo').getBoundingClientRect();
+    return { folga: concluidas.top - dica.bottom, topoDaDica: dica.top, alturaDaTela: window.innerHeight };
+  });
+  assert.ok(medidas.folga >= 24, `folga de ${medidas.folga}px entre a mensagem e as concluídas`);
+  assert.ok(medidas.topoDaDica < medidas.alturaDaTela * 0.4, 'a mensagem não vai para o meio da tela');
+
+  // Lista sem nenhuma tarefa: não há nada abaixo, então a mensagem continua no meio da tela.
+  await botao(pagina, 'Vazia').click();
+  await visivel(pagina.getByText('Nenhuma tarefa aqui'));
+  assert.equal(await pagina.locator('.sem-conteudo.compacto').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
 test('tarefa: cria com prazo de hoje, marca estrela, conclui e reabre', async (t) => {
   const { pagina, erros } = await abrir(t);
 
