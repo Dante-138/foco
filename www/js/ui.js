@@ -68,6 +68,14 @@ const ICONES = {
     ['path', { d: 'M15 6.5l5 5-5 5' }],
     ['path', { d: 'M20 11.5H10a4.5 4.5 0 0 0 0 9h3' }],
   ],
+  alca: [
+    ponto(6),
+    ponto(12),
+    ponto(18),
+    ['circle', { cx: 16, cy: 6, r: 1.7, fill: 'currentColor', stroke: 'none' }],
+    ['circle', { cx: 16, cy: 12, r: 1.7, fill: 'currentColor', stroke: 'none' }],
+    ['circle', { cx: 16, cy: 18, r: 1.7, fill: 'currentColor', stroke: 'none' }],
+  ],
   desfazer: [
     ['path', { d: 'M9 6.5l-5 5 5 5' }],
     ['path', { d: 'M4 11.5h10a4.5 4.5 0 0 1 0 9h-3' }],
