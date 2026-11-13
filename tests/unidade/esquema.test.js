@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ABAS, LIMITES, VISAO_ESTRELA, ehObjeto, sanear } from '../../www/js/nucleo/esquema.js';
+import {
+  ABAS,
+  LIMITES,
+  ORDENS_TAREFAS,
+  VISAO_ESTRELA,
+  ehObjeto,
+  sanear,
+} from '../../www/js/nucleo/esquema.js';
 import { VERSAO } from '../../www/js/nucleo/migracao.js';
 
 const HOJE = '2026-11-12';
@@ -26,10 +33,20 @@ function valido() {
     rotinaAtiva: 'r1',
     marcasRotina: { data: HOJE, porRotina: { r1: ['i2'] } },
     habitos: [
-      { id: 'h1', nome: 'Leitura', cor: 'lilas', tipo: 'simnao', unidade: null, meta: null },
-      { id: 'h2', nome: 'Água', cor: 'azul', tipo: 'numero', unidade: 'copos', meta: 2 },
+      {
+        id: 'h1',
+        nome: 'Leitura',
+        cor: 'lilas',
+        tipo: 'simnao',
+        unidade: null,
+        meta: null,
+        arquivado: false,
+      },
+      { id: 'h2', nome: 'Água', cor: 'azul', tipo: 'numero', unidade: 'copos', meta: 2, arquivado: true },
     ],
     registros: { h1: { '2026-11-12': 'feito', '2026-11-11': 'pulado' }, h2: { '2026-11-12': 1.5 } },
+    ocultarConcluidos: true,
+    ocultarArquivados: false,
     listas: [
       { id: 'l1', nome: 'Faculdade' },
       { id: 'l2', nome: 'Pessoal' },
@@ -59,6 +76,7 @@ function valido() {
         feitaEm: 3000,
       },
     ],
+    ordemTarefas: 'titulo',
   };
 }
 
@@ -85,9 +103,12 @@ test('objeto vazio vira um estado utilizável, com a lista padrão', () => {
     marcasRotina: { data: HOJE, porRotina: {} },
     habitos: [],
     registros: {},
+    ocultarConcluidos: false,
+    ocultarArquivados: true,
     listas: [{ id: 'id-gerado', nome: 'Minhas tarefas' }],
     listaAtiva: 'id-gerado',
     tarefas: [],
+    ordemTarefas: 'data',
   });
   assert.deepEqual(avisos, []);
 });
@@ -240,8 +261,8 @@ test('hábito de sim ou não nunca guarda unidade nem meta; tipo desconhecido vi
     ],
   });
   assert.deepEqual(estado.habitos, [
-    { id: 'a', nome: 'A', cor: 'rosa', tipo: 'simnao', unidade: null, meta: null },
-    { id: 'b', nome: 'Hábito', cor: 'rosa', tipo: 'simnao', unidade: null, meta: null },
+    { id: 'a', nome: 'A', cor: 'rosa', tipo: 'simnao', unidade: null, meta: null, arquivado: false },
+    { id: 'b', nome: 'Hábito', cor: 'rosa', tipo: 'simnao', unidade: null, meta: null, arquivado: false },
   ]);
 });
 
@@ -392,7 +413,40 @@ test('ehObjeto recusa null, listas e valores simples', () => {
   for (const v of [null, undefined, [], 'a', 1, true]) assert.equal(ehObjeto(v), false);
 });
 
-test('LIMITES e ABAS não podem ser alterados', () => {
+test('LIMITES, ABAS e ORDENS_TAREFAS não podem ser alterados', () => {
   assert.ok(Object.isFrozen(LIMITES));
   assert.ok(Object.isFrozen(ABAS));
+  assert.ok(Object.isFrozen(ORDENS_TAREFAS));
+});
+
+// ------------------------------------------------- campos da versão 3
+
+test('hábito: arquivado só vale quando é verdadeiro de fato', () => {
+  const { estado, avisos } = limpar({
+    habitos: [
+      { id: 'a', nome: 'A', cor: 'rosa', tipo: 'simnao', arquivado: true },
+      { id: 'b', nome: 'B', cor: 'rosa', tipo: 'simnao', arquivado: 'sim' },
+      { id: 'c', nome: 'C', cor: 'rosa', tipo: 'simnao' },
+    ],
+  });
+  assert.deepEqual(
+    estado.habitos.map((h) => h.arquivado),
+    [true, false, false],
+  );
+  assert.deepEqual(avisos, []);
+});
+
+test('filtros dos hábitos e ordem das tarefas: valor inválido volta ao padrão', () => {
+  for (const errado of [undefined, null, 1, 'true', {}]) {
+    const { estado } = limpar({ ocultarConcluidos: errado, ocultarArquivados: errado, ordemTarefas: errado });
+    assert.equal(estado.ocultarConcluidos, false);
+    assert.equal(estado.ocultarArquivados, true);
+    assert.equal(estado.ordemTarefas, ORDENS_TAREFAS[0]);
+  }
+
+  const { estado } = limpar({ ocultarConcluidos: true, ocultarArquivados: false, ordemTarefas: 'criacao' });
+  assert.deepEqual(
+    [estado.ocultarConcluidos, estado.ocultarArquivados, estado.ordemTarefas],
+    [true, false, 'criacao'],
+  );
 });

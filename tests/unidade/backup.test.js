@@ -15,7 +15,9 @@ function comDados() {
       { id: 'r', nome: 'Manhã', itens: [{ id: 'i', tipo: 'item', texto: 'Acordar', hora: '06:30' }] },
     ],
     rotinaAtiva: 'r',
-    habitos: [{ id: 'h', nome: 'Leitura', cor: 'lilas', tipo: 'simnao', unidade: null, meta: null }],
+    habitos: [
+      { id: 'h', nome: 'Leitura', cor: 'lilas', tipo: 'simnao', unidade: null, meta: null, arquivado: true },
+    ],
     registros: { h: { '2026-11-12': 'feito', '2026-11-11': 'pulado' } },
     listas: [{ id: 'l', nome: 'Faculdade' }],
     listaAtiva: 'l',

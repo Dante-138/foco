@@ -17,9 +17,12 @@ test('estado inicial tem uma lista, nenhuma rotina e a data de hoje nas marcas',
     marcasRotina: { data: HOJE, porRotina: {} },
     habitos: [],
     registros: {},
+    ocultarConcluidos: false,
+    ocultarArquivados: true,
     listas: [{ id: 'id-gerado', nome: 'Minhas tarefas' }],
     listaAtiva: 'id-gerado',
     tarefas: [],
+    ordemTarefas: 'data',
   });
 });
 

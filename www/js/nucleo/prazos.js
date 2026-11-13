@@ -19,6 +19,24 @@ export function porPrazo(a, b) {
   return a.criadaEm - b.criadaEm;
 }
 
+const alfabetica = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+
+// Lista única, sem grupos, para as ordens que não são por data (ver ORDENS_TAREFAS
+// em esquema.js). Qualquer outro valor cai na ordem por prazo.
+//   estrela: as com estrela primeiro; dentro de cada parte, por prazo
+//   titulo:  alfabética, sem diferenciar maiúsculas nem acentos
+//   criacao: as mais novas primeiro
+export function ordenar(pendentes, ordem) {
+  const copia = [...pendentes];
+  if (ordem === 'estrela')
+    return copia.sort((a, b) => Number(b.estrela) - Number(a.estrela) || porPrazo(a, b));
+  if (ordem === 'titulo') {
+    return copia.sort((a, b) => alfabetica.compare(a.titulo, b.titulo) || a.criadaEm - b.criadaEm);
+  }
+  if (ordem === 'criacao') return copia.sort((a, b) => b.criadaEm - a.criadaEm);
+  return copia.sort(porPrazo);
+}
+
 // Devolve os grupos na ordem de exibição: Atrasadas, Hoje, Amanhã, cada data
 // futura e, por fim, Sem data. "dia" é a data de hoje (AAAA-MM-DD).
 export function agrupar(pendentes, dia) {

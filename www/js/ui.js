@@ -55,6 +55,7 @@ const ICONES = {
   estrela: [['path', { d: 'M12 3.8l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8z' }]],
   cima: [['path', { d: 'M6 14.5l6-6 6 6' }]],
   baixo: [['path', { d: 'M6 9.5l6 6 6-6' }]],
+  filtro: [['path', { d: 'M4 7h16M7 12h10M10 17h4' }]],
   ajustes: [
     ['path', { d: 'M4 7h8M18 7h2M4 17h2M12 17h8' }],
     ['circle', { cx: 15, cy: 7, r: 2.5 }],
@@ -221,6 +222,9 @@ export function abrirFolha({ titulo, corpo, fecharNoFundo = true, aoFechar, aoTe
   return fechar;
 }
 
+// Cada opção: { rotulo, acao, perigo, desativado } e, para as que ficam marcadas:
+//   marcado (verdadeiro ou falso): liga e desliga, como um interruptor;
+//   atual (verdadeiro ou falso): a escolhida entre várias.
 export function abrirMenu(titulo, opcoes) {
   const fechar = abrirFolha({
     titulo,
@@ -233,13 +237,17 @@ export function abrirMenu(titulo, opcoes) {
           {
             type: 'button',
             class: `menu-item${o.perigo ? ' perigo' : ''}`,
+            role: o.marcado == null ? null : 'switch',
+            'aria-checked': o.marcado == null ? null : String(o.marcado),
+            'aria-current': o.atual ? 'true' : null,
             disabled: Boolean(o.desativado),
             onclick: () => {
               fechar();
               o.acao();
             },
           },
-          o.rotulo,
+          h('span', {}, o.rotulo),
+          o.marcado || o.atual ? icone('check', { tam: 20 }) : null,
         ),
       ),
     ),

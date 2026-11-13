@@ -15,7 +15,7 @@ test('v1 -> v2 troca a cor hexadecimal do hábito pela chave da paleta', () => {
     dados.habitos.map((h) => h.cor),
     ['amarelo', 'azul', 'neutro'],
   );
-  assert.equal(dados.versao, 2);
+  assert.equal(dados.versao, VERSAO);
 });
 
 test('cor fora da tabela da v1 fica como está, para a validação decidir', () => {
@@ -61,4 +61,9 @@ test('a migração termina sempre na versão atual e devolve o mesmo objeto', ()
   const dados = { versao: 1, habitos: [] };
   assert.equal(migrar(dados), dados);
   assert.equal(dados.versao, VERSAO);
+});
+
+test('v2 -> v3 só sobe o número: os campos novos nascem na validação', () => {
+  const dados = migrar({ versao: 2, habitos: [{ id: 'a', cor: 'rosa' }], tarefas: [] });
+  assert.deepEqual(dados, { versao: 3, habitos: [{ id: 'a', cor: 'rosa' }], tarefas: [] });
 });

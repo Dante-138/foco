@@ -10,12 +10,16 @@
 //   rotinas:      [{ id, nome, itens: [{ id, tipo: 'secao' | 'item', texto, hora: 'HH:MM' | null }] }]
 //   rotinaAtiva:  id de uma rotina existente | null
 //   marcasRotina: { data: 'AAAA-MM-DD', porRotina: { rotinaId: [itemId] } }   (só o dia corrente)
-//   habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade: texto | null, meta: número | null }]
+//   habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade: texto | null, meta: número | null,
+//                    arquivado }]
 //   registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número >= 0 } }
+//   ocultarConcluidos: verdadeiro esconde da grade os hábitos já resolvidos hoje (padrão: falso)
+//   ocultarArquivados: verdadeiro esconde da grade os hábitos arquivados (padrão: verdadeiro)
 //   listas:       [{ id, nome }]   (sempre pelo menos uma)
 //   listaAtiva:   id de uma lista existente | 'estrela'
 //   tarefas:      [{ id, listaId, titulo, notas, prazo: 'AAAA-MM-DD' | null,
 //                    estrela, feita, criadaEm, feitaEm: número | null }]
+//   ordemTarefas: 'data' | 'estrela' | 'titulo' | 'criacao'   (padrão: 'data')
 // }
 //
 // Regra de correção: o que dá para aproveitar é corrigido (texto cortado no
@@ -42,6 +46,8 @@ export const LIMITES = Object.freeze({
 export const ABAS = Object.freeze(['rotinas', 'habitos', 'tarefas']);
 export const VISAO_ESTRELA = 'estrela'; // valor de listaAtiva para a visão "com estrela"
 export const NOME_LISTA_PADRAO = 'Minhas tarefas';
+// Ordens da lista de tarefas; a primeira é a padrão. A ordenação em si está em prazos.js.
+export const ORDENS_TAREFAS = Object.freeze(['data', 'estrela', 'titulo', 'criacao']);
 
 export const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -96,6 +102,7 @@ function sanearHabitos(valor, avisos) {
       tipo: numerico ? 'numero' : 'simnao',
       unidade: numerico ? cortar(habito.unidade, LIMITES.unidade) || null : null,
       meta: numerico ? (numeroValido(habito.meta) && habito.meta > 0 ? habito.meta : 1) : null,
+      arquivado: habito.arquivado === true,
     };
   });
 }
@@ -181,12 +188,15 @@ export function sanear(dados, { dia, gerarId }) {
     marcasRotina: sanearMarcas(dados.marcasRotina, rotinas, dia),
     habitos,
     registros: sanearRegistros(dados.registros, habitos, avisos),
+    ocultarConcluidos: dados.ocultarConcluidos === true,
+    ocultarArquivados: dados.ocultarArquivados !== false,
     listas,
     listaAtiva:
       dados.listaAtiva === VISAO_ESTRELA || listas.some((l) => l.id === dados.listaAtiva)
         ? dados.listaAtiva
         : listas[0].id,
     tarefas: sanearTarefas(dados.tarefas, listas, avisos),
+    ordemTarefas: ORDENS_TAREFAS.includes(dados.ordemTarefas) ? dados.ordemTarefas : ORDENS_TAREFAS[0],
   };
   return { estado, avisos };
 }

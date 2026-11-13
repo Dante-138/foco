@@ -139,7 +139,7 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
 
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 2);
+  assert.equal(salvo.versao, 3);
   assert.deepEqual(
     salvo.rotinas[0].itens.map((i) => [i.tipo, i.hora, i.texto]),
     [
@@ -242,7 +242,153 @@ test('hábito: cumprir destaca a célula e o anel; as outras marcas só dão o p
   assert.deepEqual(erros, []);
 });
 
+test('hábitos: ocultar concluídos esconde o que já foi resolvido hoje, e o filtro traz de volta', async (t) => {
+  const habito = (id, nome) => ({
+    id,
+    nome,
+    cor: 'azul',
+    tipo: 'simnao',
+    unidade: null,
+    meta: null,
+    arquivado: false,
+  });
+  const salvo = JSON.stringify({
+    versao: 3,
+    aba: 'habitos',
+    habitos: [habito('a', 'Leitura'), habito('b', 'Água')],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const filtro = pagina.locator('.filtro');
+  const sumiu = (nome) =>
+    pagina.waitForFunction((n) => !document.querySelector(`[aria-label^="${n}, hoje"]`), nome, ESPERA);
+
+  await filtro.click();
+  await pagina.getByRole('switch', { name: 'Ocultar concluídos' }).click();
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).ocultarConcluidos, true);
+
+  // Marcado como feito, o hábito ainda mostra a resposta ao toque e só depois sai da grade.
+  await botao(pagina, 'Leitura, hoje: não feito').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  await sumiu('Leitura');
+  await visivel(botao(pagina, 'Água, hoje: não feito'));
+  assert.equal(await filtro.textContent(), 'Filtro: 1 oculto');
+
+  // Com todos resolvidos, a grade avisa e o filtro continua ao alcance.
+  await botao(pagina, 'Água, hoje: não feito').click();
+  await sumiu('Água');
+  await visivel(pagina.getByText('Tudo feito por hoje'));
+  assert.equal(await filtro.textContent(), 'Filtro: 2 ocultos');
+
+  // Desligar o filtro traz os dois de volta, e a escolha fica salva.
+  await filtro.click();
+  const interruptor = pagina.getByRole('switch', { name: 'Ocultar concluídos' });
+  assert.equal(await interruptor.getAttribute('aria-checked'), 'true');
+  await interruptor.click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  await visivel(botao(pagina, 'Água, hoje: feito'));
+  assert.equal(await filtro.textContent(), 'Filtro');
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).ocultarConcluidos, false);
+  assert.deepEqual(erros, []);
+});
+
+test('hábitos: arquivar tira da grade sem apagar; o filtro mostra e dá para desarquivar', async (t) => {
+  const { pagina, erros } = await abrir(t);
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+  await botao(pagina, 'Leitura, hoje: não feito').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+
+  await botao(pagina, 'Editar Leitura').click();
+  await botao(pagina, 'Arquivar').click();
+  await visivel(pagina.getByText('Nenhum hábito ativo'));
+  await visivel(pagina.getByText(/Hábito arquivado/));
+  const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
+  assert.equal(salvo.habitos[0].arquivado, true);
+  assert.deepEqual(Object.values(salvo.registros[salvo.habitos[0].id]), ['feito']); // o histórico fica
+
+  await pagina.locator('.filtro').click();
+  await pagina.getByRole('switch', { name: 'Ocultar arquivados' }).click();
+  await visivel(pagina.locator('.habito.arquivado'));
+  await visivel(pagina.getByText('arquivado', { exact: true }));
+
+  await botao(pagina, 'Editar Leitura').click();
+  await botao(pagina, 'Desarquivar').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  assert.equal(await pagina.locator('.habito.arquivado').count(), 0);
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).habitos[0].arquivado, false);
+  assert.deepEqual(erros, []);
+});
+
 // ------------------------------------------------------------------- tarefas
+
+test('tarefas: ordenar por data, estrela, título e criação; a escolha vale para todas as listas', async (t) => {
+  const tarefa = (id, titulo, extra) => ({
+    id,
+    listaId: 'l',
+    titulo,
+    notas: '',
+    prazo: null,
+    estrela: false,
+    feita: false,
+    feitaEm: null,
+    ...extra,
+  });
+  const salvo = JSON.stringify({
+    versao: 3,
+    aba: 'tarefas',
+    listas: [
+      { id: 'l', nome: 'Faculdade' },
+      { id: 'outra', nome: 'Outra' },
+    ],
+    listaAtiva: 'l',
+    tarefas: [
+      tarefa('1', 'Zebra', { criadaEm: 1, prazo: '2030-01-10' }),
+      tarefa('2', 'abacaxi', { criadaEm: 2, estrela: true }),
+      tarefa('3', 'Maçã', { criadaEm: 3, prazo: '2030-01-05' }),
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const titulos = () => pagina.locator('.tarefa-titulo').allTextContents();
+  const ordenarPor = async (rotulo) => {
+    await botao(pagina, 'Opções da lista').click();
+    await pagina.getByRole('button', { name: /^Ordenar por:/ }).click();
+    await botao(pagina, rotulo).click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+
+  // Padrão: por data, em grupos, com as sem data no fim.
+  await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
+  assert.deepEqual(await titulos(), ['Maçã', 'Zebra', 'abacaxi']);
+
+  await ordenarPor('Título');
+  assert.deepEqual(await titulos(), ['abacaxi', 'Maçã', 'Zebra']);
+  assert.equal(await pagina.getByRole('heading', { name: 'Sem data' }).count(), 0); // lista única, sem grupos
+  await visivel(pagina.getByText(/5 de jan\. de 2030/)); // sem o grupo, a data vai na linha
+
+  await ordenarPor('Com estrela primeiro');
+  assert.deepEqual(await titulos(), ['abacaxi', 'Maçã', 'Zebra']);
+  await ordenarPor('Mais recentes primeiro');
+  assert.deepEqual(await titulos(), ['Maçã', 'abacaxi', 'Zebra']);
+
+  // A opção escolhida aparece marcada no menu e fica salva.
+  await botao(pagina, 'Opções da lista').click();
+  await visivel(botao(pagina, 'Ordenar por: Mais recentes primeiro'));
+  await botao(pagina, 'Ordenar por: Mais recentes primeiro').click();
+  assert.equal(await botao(pagina, 'Mais recentes primeiro').getAttribute('aria-current'), 'true');
+  assert.equal(await botao(pagina, 'Data').getAttribute('aria-current'), null);
+  await botao(pagina, 'Data').click();
+  await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).ordemTarefas, 'data');
+
+  // A visão "com estrela" tem o mesmo menu de ordem.
+  await botao(pagina, 'Com estrela').click();
+  await botao(pagina, 'Ordenar por').click();
+  await visivel(botao(pagina, 'Título'));
+  assert.deepEqual(erros, []);
+});
 
 test('tarefas: lista só com concluídas mostra a mensagem no alto, com folga até as concluídas', async (t) => {
   const salvo = JSON.stringify({

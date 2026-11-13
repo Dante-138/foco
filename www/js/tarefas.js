@@ -4,8 +4,8 @@
 import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
 import { hoje, somaDias } from './nucleo/datas.js';
-import { LIMITES, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
-import { agrupar, rotuloData } from './nucleo/prazos.js';
+import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
+import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
 import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
 
 let concluidasAbertas = false;
@@ -221,8 +221,32 @@ async function excluirLista(lista) {
   redesenhar();
 }
 
+// Ordem das tarefas pendentes. Vale para todas as listas e para a visão "com estrela".
+const ROTULO_DA_ORDEM = {
+  data: 'Data',
+  estrela: 'Com estrela primeiro',
+  titulo: 'Título',
+  criacao: 'Mais recentes primeiro',
+};
+
+function escolherOrdem() {
+  abrirMenu(
+    'Ordenar por',
+    ORDENS_TAREFAS.map((ordem) => ({
+      rotulo: ROTULO_DA_ORDEM[ordem],
+      atual: estado.ordemTarefas === ordem,
+      acao: () => {
+        estado.ordemTarefas = ordem;
+        salvar();
+        redesenhar();
+      },
+    })),
+  );
+}
+
 function menuLista(lista) {
   abrirMenu(lista.nome, [
+    { rotulo: `Ordenar por: ${ROTULO_DA_ORDEM[estado.ordemTarefas]}`, acao: escolherOrdem },
     { rotulo: 'Renomear lista', acao: () => editarLista(lista) },
     {
       rotulo: 'Excluir lista',
@@ -235,9 +259,10 @@ function menuLista(lista) {
 
 // --------------------------------------------------------------- desenho
 
-function linha(tarefa, { atrasada = false, mostrarLista = false } = {}) {
+// comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
+function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
   const detalhes = [];
-  if (atrasada || tarefa.feita) {
+  if (atrasada || tarefa.feita || comPrazo) {
     if (tarefa.prazo) {
       detalhes.push(
         h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, rotuloData(tarefa.prazo, hoje())),
@@ -284,6 +309,44 @@ function linha(tarefa, { atrasada = false, mostrarLista = false } = {}) {
       icone('estrela', { cheio: tarefa.estrela, tam: 22 }),
     ),
   );
+}
+
+// Pendentes na ordem escolhida. Por data: um cartão por grupo (Atrasadas, Hoje, Amanhã,
+// cada data, Sem data). Nas outras ordens: um cartão só, com a data em cada linha.
+function cartoesDasPendentes(pendentes, naEstrela) {
+  const diaHoje = hoje();
+  if (estado.ordemTarefas === 'data') {
+    return agrupar(pendentes, diaHoje).map((g) =>
+      h(
+        'section',
+        { class: `cartao grupo${g.atrasado ? ' atrasado' : ''}` },
+        h('h3', { class: 'grupo-titulo' }, g.rotulo),
+        h(
+          'ul',
+          {},
+          g.tarefas.map((t) => linha(t, { atrasada: g.atrasado, mostrarLista: naEstrela })),
+        ),
+      ),
+    );
+  }
+  if (!pendentes.length) return [];
+  return [
+    h(
+      'section',
+      { class: 'cartao' },
+      h(
+        'ul',
+        {},
+        ordenar(pendentes, estado.ordemTarefas).map((t) =>
+          linha(t, {
+            atrasada: Boolean(t.prazo) && t.prazo < diaHoje,
+            mostrarLista: naEstrela,
+            comPrazo: true,
+          }),
+        ),
+      ),
+    ),
+  ];
 }
 
 function render(raiz) {
@@ -334,18 +397,7 @@ function render(raiz) {
     ),
   );
 
-  const blocos = agrupar(pendentes, hoje()).map((g) =>
-    h(
-      'section',
-      { class: `cartao grupo${g.atrasado ? ' atrasado' : ''}` },
-      h('h3', { class: 'grupo-titulo' }, g.rotulo),
-      h(
-        'ul',
-        {},
-        g.tarefas.map((t) => linha(t, { atrasada: g.atrasado, mostrarLista: naEstrela })),
-      ),
-    ),
-  );
+  const blocos = cartoesDasPendentes(pendentes, naEstrela);
 
   if (!pendentes.length) {
     blocos.push(
@@ -400,18 +452,16 @@ function render(raiz) {
         h('h2', {}, naEstrela ? 'Com estrela' : ativa.nome),
         h('p', { class: 'sub' }, pendentes.length === 1 ? '1 pendente' : `${pendentes.length} pendentes`),
       ),
-      naEstrela
-        ? null
-        : h(
-            'button',
-            {
-              type: 'button',
-              class: 'botao-icone',
-              'aria-label': 'Opções da lista',
-              onclick: () => menuLista(ativa),
-            },
-            icone('pontos'),
-          ),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'botao-icone',
+          'aria-label': naEstrela ? 'Ordenar por' : 'Opções da lista',
+          onclick: () => (naEstrela ? escolherOrdem() : menuLista(ativa)),
+        },
+        icone('pontos'),
+      ),
     ),
     ...blocos,
   );

@@ -537,7 +537,7 @@ ul {
   color: var(--cor);
 }
 
-.habito-nome > span:last-child {
+.habito-nome > span:nth-of-type(2) {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -545,6 +545,45 @@ ul {
 .anel {
   flex: none;
   line-height: 0;
+}
+
+/* Botão de filtro, no canto do cabeçalho da grade. Fica na cor de destaque quando esconde algo. */
+.filtro {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px 0 4px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--texto-2);
+}
+
+.filtro:active {
+  background: var(--toque);
+}
+
+.filtro.ativo {
+  color: var(--acento);
+}
+
+/* Hábito arquivado, quando o filtro deixa ver: apagado e com uma etiqueta. */
+.habito.arquivado .habito-nome,
+.habito.arquivado .cel {
+  opacity: 0.45;
+}
+
+.etiqueta {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .cel {
@@ -962,10 +1001,20 @@ textarea.editor {
 }
 
 .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 48px;
   padding: 0 4px;
   text-align: left;
   font-size: 16px;
+}
+
+/* Marca da opção ligada ou escolhida. */
+.menu-item .icone {
+  flex: none;
+  color: var(--acento);
 }
 
 .menu-item.perigo {

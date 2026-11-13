@@ -6,8 +6,29 @@ import { uid } from './nucleo/ids.js';
 import { hoje, deIso, somaDias } from './nucleo/datas.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { CORES, COR_PADRAO, corValida } from './nucleo/paleta.js';
-import { formatar, lerNumero, metaDe, cumprido, proximaMarca, taxa } from './nucleo/habito-calculo.js';
-import { h, svg, icone, abrirFolha, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
+import {
+  formatar,
+  lerNumero,
+  metaDe,
+  cumprido,
+  proximaMarca,
+  resolvido,
+  taxa,
+  visiveis,
+} from './nucleo/habito-calculo.js';
+import {
+  h,
+  svg,
+  icone,
+  abrirFolha,
+  abrirMenu,
+  avisar,
+  confirmar,
+  campo,
+  estadoVazio,
+  redesenhar,
+  vibrar,
+} from './ui.js';
 
 const corCss = (chave) => `var(--cor-${corValida(chave) ? chave : COR_PADRAO})`;
 
@@ -16,6 +37,11 @@ const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 // A célula que acabou de ser marcada, para o próximo desenho animar só ela:
 // { habitoId, dia, concluiu }. O desenho consome e zera.
 let recemMarcada = null;
+
+// Com "ocultar concluídos" ligado, o hábito recém-resolvido fica na tela este tempo,
+// para a resposta ao toque aparecer, e só então sai da grade.
+const SUMIR_MS = 700;
+let esperaSumir = null;
 
 const acabouDeConcluir = (habito) => recemMarcada?.habitoId === habito.id && recemMarcada.concluiu;
 
@@ -65,6 +91,28 @@ function gravar(habito, dia, valor) {
 
 function alternar(habito, dia) {
   gravar(habito, dia, proximaMarca(estado.registros[habito.id]?.[dia]));
+}
+
+// Filtros da grade, como no Loop: esconder o que já foi resolvido hoje e os arquivados.
+function alternarFiltro(chave) {
+  estado[chave] = !estado[chave];
+  salvar();
+  redesenhar();
+}
+
+function abrirFiltro() {
+  abrirMenu('Filtro', [
+    {
+      rotulo: 'Ocultar concluídos',
+      marcado: estado.ocultarConcluidos,
+      acao: () => alternarFiltro('ocultarConcluidos'),
+    },
+    {
+      rotulo: 'Ocultar arquivados',
+      marcado: estado.ocultarArquivados,
+      acao: () => alternarFiltro('ocultarArquivados'),
+    },
+  ]);
 }
 
 function rotuloDia(dia, diaHoje) {
@@ -233,7 +281,7 @@ function editarHabito(habito) {
     }
 
     if (habito) Object.assign(habito, dados);
-    else estado.habitos.push({ id: uid(), ...dados });
+    else estado.habitos.push({ id: uid(), ...dados, arquivado: false });
     salvar();
     fechar();
     redesenhar();
@@ -246,6 +294,17 @@ function editarHabito(habito) {
     salvar();
     fechar();
     redesenhar();
+  };
+
+  // Arquivar guarda o hábito e todo o histórico dele; só tira da grade.
+  const arquivar = () => {
+    habito.arquivado = !habito.arquivado;
+    salvar();
+    fechar();
+    redesenhar();
+    if (habito.arquivado && estado.ocultarArquivados) {
+      avisar('Hábito arquivado. Para ver, abra o Filtro e desligue "Ocultar arquivados".');
+    }
   };
 
   const fechar = abrirFolha({
@@ -274,6 +333,11 @@ function editarHabito(habito) {
               'Descer',
             ),
             h('span', { class: 'espaco' }),
+            h(
+              'button',
+              { type: 'button', class: 'botao', onclick: arquivar },
+              habito.arquivado ? 'Desarquivar' : 'Arquivar',
+            ),
           )
         : null,
       h(
@@ -342,6 +406,18 @@ function render(raiz) {
   const diaHoje = hoje(); // uma leitura do relógio por desenho: cabeçalho e células usam o mesmo dia
   const dias = Array.from({ length: n }, (_, i) => somaDias(diaHoje, -i));
 
+  // O hábito recém-marcado continua na grade neste desenho, mesmo que o filtro o esconda.
+  const manter = recemMarcada?.habitoId ?? null;
+  const naGrade = visiveis(estado.habitos, estado.registros, diaHoje, {
+    ocultarConcluidos: estado.ocultarConcluidos,
+    ocultarArquivados: estado.ocultarArquivados,
+    manter,
+  });
+  const ocultos = estado.habitos.length - naGrade.length;
+  const vaiSumir =
+    estado.ocultarConcluidos &&
+    naGrade.some((x) => x.id === manter && resolvido(x, estado.registros[x.id]?.[diaHoje]));
+
   raiz.replaceChildren(
     h(
       'div',
@@ -349,7 +425,12 @@ function render(raiz) {
       h(
         'div',
         { class: 'grade-cab' },
-        h('span'),
+        h(
+          'button',
+          { type: 'button', class: `filtro${ocultos ? ' ativo' : ''}`, onclick: abrirFiltro },
+          icone('filtro', { tam: 20 }),
+          h('span', {}, ocultos ? `Filtro: ${ocultos} ${ocultos === 1 ? 'oculto' : 'ocultos'}` : 'Filtro'),
+        ),
         dias.map((dia) => {
           const data = deIso(dia);
           return h(
@@ -360,10 +441,10 @@ function render(raiz) {
           );
         }),
       ),
-      estado.habitos.map((habito) =>
+      naGrade.map((habito) =>
         h(
           'div',
-          { class: 'habito', style: { '--cor': corCss(habito.cor) } },
+          { class: `habito${habito.arquivado ? ' arquivado' : ''}`, style: { '--cor': corCss(habito.cor) } },
           h(
             'button',
             {
@@ -374,13 +455,23 @@ function render(raiz) {
             },
             anel(habito, diaHoje),
             h('span', {}, habito.nome),
+            habito.arquivado ? h('small', { class: 'etiqueta' }, 'arquivado') : null,
           ),
           dias.map((dia) => celula(habito, dia, diaHoje)),
         ),
       ),
+      naGrade.length
+        ? null
+        : estadoVazio(
+            estado.ocultarConcluidos ? 'Tudo feito por hoje' : 'Nenhum hábito ativo',
+            'Toque em Filtro para ver os hábitos ocultos.',
+          ),
     ),
   );
   recemMarcada = null; // a animação é só do desenho logo depois do toque
+
+  clearTimeout(esperaSumir);
+  if (vaiSumir) esperaSumir = setTimeout(redesenhar, SUMIR_MS);
 }
 
 export const habitos = {

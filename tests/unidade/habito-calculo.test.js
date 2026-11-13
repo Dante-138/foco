@@ -7,7 +7,9 @@ import {
   lerNumero,
   metaDe,
   proximaMarca,
+  resolvido,
   taxa,
+  visiveis,
 } from '../../www/js/nucleo/habito-calculo.js';
 
 const simNao = { tipo: 'simnao' };
@@ -123,4 +125,63 @@ test('taxa com todos os dias pulados é zero, sem dividir por zero', () => {
 test('taxa de hábito numérico conta os dias em que a meta foi atingida', () => {
   const registro = { '2026-11-12': 2, '2026-11-11': 1.5, '2026-11-10': 3 };
   assert.equal(taxa(copos, registro, HOJE), 2 / 7);
+});
+
+test('resolvido: cumprido ou pulado; vazio e numérico abaixo da meta ainda pedem ação', () => {
+  assert.equal(resolvido(simNao, 'feito'), true);
+  assert.equal(resolvido(simNao, 'pulado'), true);
+  assert.equal(resolvido(simNao, undefined), false);
+  assert.equal(resolvido(copos, 2), true);
+  assert.equal(resolvido(copos, 1), false);
+  assert.equal(resolvido(copos, 'pulado'), true);
+});
+
+test('visiveis: sem filtro mostra todos, na ordem em que estão', () => {
+  const habitos = [
+    { id: 'a', tipo: 'simnao', arquivado: false },
+    { id: 'b', tipo: 'simnao', arquivado: true },
+  ];
+  const vistos = visiveis(habitos, { a: { [HOJE]: 'feito' } }, HOJE, {
+    ocultarConcluidos: false,
+    ocultarArquivados: false,
+  });
+  assert.deepEqual(vistos, habitos);
+});
+
+test('visiveis: ocultar arquivados tira só os arquivados', () => {
+  const habitos = [
+    { id: 'a', tipo: 'simnao', arquivado: false },
+    { id: 'b', tipo: 'simnao', arquivado: true },
+  ];
+  const vistos = visiveis(habitos, {}, HOJE, { ocultarConcluidos: false, ocultarArquivados: true });
+  assert.deepEqual(
+    vistos.map((h) => h.id),
+    ['a'],
+  );
+});
+
+test('visiveis: ocultar concluídos olha só o dia de hoje e poupa o hábito recém-marcado', () => {
+  const habitos = [
+    { id: 'feito', tipo: 'simnao', arquivado: false },
+    { id: 'pulado', tipo: 'simnao', arquivado: false },
+    { id: 'ontem', tipo: 'simnao', arquivado: false },
+    { id: 'parcial', tipo: 'numero', meta: 2, arquivado: false },
+    { id: 'vazio', tipo: 'simnao', arquivado: false },
+  ];
+  const registros = {
+    feito: { [HOJE]: 'feito' },
+    pulado: { [HOJE]: 'pulado' },
+    ontem: { '2026-11-11': 'feito' },
+    parcial: { [HOJE]: 1 },
+  };
+  const filtros = { ocultarConcluidos: true, ocultarArquivados: true };
+
+  assert.deepEqual(
+    visiveis(habitos, registros, HOJE, filtros).map((h) => h.id),
+    ['ontem', 'parcial', 'vazio'],
+  );
+  assert.deepEqual(
+    visiveis(habitos, registros, HOJE, { ...filtros, manter: 'feito' }).map((h) => h.id),
+    ['feito', 'ontem', 'parcial', 'vazio'],
+  );
 });

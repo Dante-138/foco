@@ -31,6 +31,20 @@ export function cumprido(habito, valor) {
   return valor === 'feito';
 }
 
+// O hábito não pede mais nada no dia: foi cumprido ou o dia foi pulado.
+export const resolvido = (habito, valor) => valor === 'pulado' || cumprido(habito, valor);
+
+// Quais hábitos aparecem na grade, conforme os filtros. "manter" é o id de um hábito
+// que continua na tela mesmo resolvido: o que acabou de ser marcado, enquanto a
+// resposta ao toque ainda está sendo mostrada.
+export function visiveis(habitos, registros, dia, { ocultarConcluidos, ocultarArquivados, manter = null }) {
+  return habitos.filter((habito) => {
+    if (ocultarArquivados && habito.arquivado) return false;
+    if (!ocultarConcluidos || habito.id === manter) return true;
+    return !resolvido(habito, registros[habito.id]?.[dia]);
+  });
+}
+
 // Toque em hábito de sim ou não: vazio -> feito -> pulado -> vazio (null).
 export function proximaMarca(atual) {
   if (atual === 'feito') return 'pulado';
