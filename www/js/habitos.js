@@ -23,6 +23,7 @@ import {
   icone,
   abrirFolha,
   abrirMenu,
+  aoSegurar,
   avisar,
   confirmar,
   campo,
@@ -198,6 +199,58 @@ function pedirValor(habito, dia) {
   entrada.select();
 }
 
+// Nota do dia, como no Loop: segurar uma célula da grade abre a nota daquele dia.
+function editarNota(habito, dia) {
+  const atual = estado.notasHabito[habito.id]?.[dia] ?? '';
+  const texto = h('textarea', {
+    class: 'entrada',
+    rows: 3,
+    value: atual,
+    placeholder: 'Ex.: dia de viagem',
+    maxLength: LIMITES.notaHabito,
+  });
+
+  const gravarNota = (valor) => {
+    const notas = (estado.notasHabito[habito.id] ??= {});
+    if (valor) notas[dia] = valor;
+    else delete notas[dia];
+    if (!Object.keys(notas).length) delete estado.notasHabito[habito.id];
+    salvar();
+    fechar();
+    redesenhar();
+  };
+
+  const fechar = abrirFolha({
+    titulo: `Nota: ${habito.nome} (${rotuloDia(dia, hoje())})`,
+    corpo: h(
+      'form',
+      {
+        class: 'folha-form',
+        onsubmit: (e) => {
+          e.preventDefault();
+          gravarNota(texto.value.trim());
+        },
+      },
+      campo('Nota do dia', texto),
+      h(
+        'div',
+        { class: 'linha-botoes' },
+        atual
+          ? h(
+              'button',
+              { type: 'button', class: 'botao perigo', onclick: () => gravarNota('') },
+              'Excluir nota',
+            )
+          : null,
+        h('span', { class: 'espaco' }),
+        h('button', { type: 'button', class: 'botao', onclick: () => fechar() }, 'Cancelar'),
+        h('button', { type: 'submit', class: 'botao cheio' }, 'Salvar'),
+      ),
+    ),
+  });
+  texto.focus();
+}
+
 function mover(habito, passo) {
   const de = estado.habitos.indexOf(habito);
   const para = de + passo;
@@ -215,7 +268,7 @@ function resumoDoHabito(habito) {
   const { atual, melhor } = sequencias(habito, registro, dia);
   const dias = (n) => `${n} ${n === 1 ? 'dia' : 'dias'}`;
   const pontos = Math.round(pontuacao(habito, registro, dia) * 100);
-  return `Pontuação ${pontos}%. Sequência atual: ${dias(atual)}. Melhor: ${dias(melhor)}.`;
+  return `Pontuação ${pontos}%. Sequência atual: ${dias(atual)}. Melhor: ${dias(melhor)}. Segure um dia na grade para escrever uma nota.`;
 }
 
 function editarHabito(habito) {
@@ -322,6 +375,7 @@ function editarHabito(habito) {
     if (!(await confirmar(`Excluir o hábito "${habito.nome}" e todo o histórico dele?`))) return;
     estado.habitos = estado.habitos.filter((x) => x.id !== habito.id);
     delete estado.registros[habito.id];
+    delete estado.notasHabito[habito.id];
     // Itens de rotina ligados a este hábito ficam sem ligação.
     for (const rotina of estado.rotinas) {
       for (const item of rotina.itens) if (item.habitoId === habito.id) item.habitoId = null;
@@ -392,7 +446,18 @@ function editarHabito(habito) {
 
 // --------------------------------------------------------------- desenho
 
+// A célula guarda a marca do dia; segurar abre a nota. Com nota, aparece um ponto no canto.
 function celula(habito, dia, diaHoje) {
+  const botao = celulaSemNota(habito, dia, diaHoje);
+  aoSegurar(botao, () => editarNota(habito, dia));
+  if (estado.notasHabito[habito.id]?.[dia]) {
+    botao.classList.add('com-nota');
+    botao.setAttribute('aria-label', `${botao.getAttribute('aria-label')}, com nota`);
+  }
+  return botao;
+}
+
+function celulaSemNota(habito, dia, diaHoje) {
   const valor = estado.registros[habito.id]?.[dia];
   const base = { type: 'button' };
   const resposta = respostaAoToque(habito, dia);
