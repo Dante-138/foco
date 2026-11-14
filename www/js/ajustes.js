@@ -5,6 +5,8 @@ import { hoje } from './nucleo/datas.js';
 import { uid } from './nucleo/ids.js';
 import { MOTIVO, gerarBackup, lerBackup, resumir } from './nucleo/backup.js';
 import { h, abrirFolha, confirmar, campo, avisar, redesenhar } from './ui.js';
+import { descreverBuild } from './nucleo/build.js';
+import { BUILD } from './build-info.js';
 import { temaEscolhido, definirTema } from './tema.js';
 import {
   agendarSincronia,
@@ -242,6 +244,8 @@ export function abrirAjustes() {
           'Copiar dados põe tudo na área de transferência, em texto. Guarde esse texto em um lugar seguro: ele é o seu backup.',
         ),
       ),
+      // Versão, commit e data do build: é o que identifica o app instalado ao relatar um defeito.
+      h('p', { class: 'dica carimbo' }, descreverBuild(BUILD)),
       h(
         'div',
         { class: 'linha-botoes' },

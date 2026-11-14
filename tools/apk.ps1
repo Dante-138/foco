@@ -141,6 +141,8 @@ try {
         }
         # Copia www/ para dentro do projeto Android e atualiza a configuração nativa.
         Rodar npx @('cap', 'sync', 'android')
+        # Versão, commit e data do build, mostrados no fim de Ajustes.
+        Rodar node @('tools/carimbar-build.mjs')
     }
     finally { Pop-Location }
 
