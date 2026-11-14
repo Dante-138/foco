@@ -16,6 +16,7 @@
 //   habitos:      [{ id, nome, cor, tipo: 'simnao' | 'numero', unidade: texto | null, meta: número | null,
 //                    arquivado }]
 //   registros:    { habitoId: { 'AAAA-MM-DD': 'feito' | 'pulado' | número >= 0 } }
+//   notasHabito:  { habitoId: { 'AAAA-MM-DD': texto } }   (nota de um dia, como no Loop; nunca vazia)
 //   ocultarConcluidos: verdadeiro esconde da grade os hábitos já resolvidos hoje (padrão: falso)
 //   ocultarArquivados: verdadeiro esconde da grade os hábitos arquivados (padrão: verdadeiro)
 //   listas:       [{ id, nome }]   (sempre pelo menos uma)
@@ -48,6 +49,7 @@ export const LIMITES = Object.freeze({
   nomeLista: 40,
   tituloTarefa: 200,
   notasTarefa: 2000,
+  notaHabito: 300,
 });
 
 export const ABAS = Object.freeze(['rotinas', 'habitos', 'tarefas']);
@@ -139,6 +141,24 @@ function sanearRegistros(valor, habitos, avisos) {
   return registros;
 }
 
+// Notas dos dias dos hábitos: só de hábitos existentes, com data real e texto. Texto
+// vazio depois de aparado é descartado sem aviso (é o mesmo que não ter nota).
+function sanearNotasHabito(valor, habitos, avisos) {
+  const origem = ehObjeto(valor) ? valor : {};
+  const notas = {};
+  for (const { id } of habitos) {
+    if (!ehObjeto(origem[id])) continue;
+    const entradas = Object.entries(origem[id]);
+    const validas = entradas.filter(([dia, texto]) => dataValida(dia) && typeof texto === 'string');
+    if (validas.length !== entradas.length) avisos.push('nota de hábito inválida, descartada');
+    const comTexto = validas
+      .map(([dia, texto]) => [dia, cortar(texto, LIMITES.notaHabito)])
+      .filter(([, texto]) => texto);
+    if (comTexto.length) notas[id] = Object.fromEntries(comTexto);
+  }
+  return notas;
+}
+
 function sanearListas(valor, gerarId, avisos) {
   const listas = comIdUnico(valor, 'listas', avisos).map((lista) => ({
     id: lista.id,
@@ -212,6 +232,7 @@ export function sanear(dados, { dia, gerarId }) {
     marcadosNoFim: dados.marcadosNoFim !== false,
     habitos,
     registros: sanearRegistros(dados.registros, habitos, avisos),
+    notasHabito: sanearNotasHabito(dados.notasHabito, habitos, avisos),
     ocultarConcluidos: dados.ocultarConcluidos === true,
     ocultarArquivados: dados.ocultarArquivados !== false,
     listas,
