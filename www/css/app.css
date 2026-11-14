@@ -104,6 +104,13 @@ body {
   margin: 0;
 }
 
+/* Nada passa da borda da tela. Sem isto, a animação de troca de aba (o conteúdo entra 28 px
+   deslocado) faz o Chrome do Android alargar a janela de layout por um instante, e o botão +
+   e as outras peças fixas pulam de lugar. Com a raiz cortando, o body corta o que sai dele. */
+html {
+  overflow: hidden;
+}
+
 body {
   display: flex;
   flex-direction: column;
