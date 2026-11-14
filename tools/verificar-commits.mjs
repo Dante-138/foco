@@ -11,6 +11,10 @@
 // Variável de ambiente opcional TITULO_PR: título do pull request, conferido
 // pela mesma regra (com squash merge, é ele que vira o commit na main).
 //
+// Uso só para o pull request: node tools/verificar-commits.mjs --pr
+//   Confere TITULO_PR como assunto e CORPO_PR (a descrição) como corpo: com squash merge, a
+//   descrição vira o corpo do commit na main. Não lê commit nenhum.
+//
 // Regras:
 // 1. Assunto no padrão Conventional Commits: tipo(escopo opcional): descrição
 // 2. Assunto com no máximo 72 caracteres e sem ponto final
@@ -62,8 +66,32 @@ function commitsDesde(base, ponta) {
     });
 }
 
+function relatar(itens) {
+  const reprovados = itens.filter((item) => item.problemas.length);
+  for (const item of reprovados) {
+    console.error(`REPROVADO  ${item.rotulo}`);
+    for (const problema of item.problemas) console.error(`           - ${problema}`);
+  }
+  console.log(`${itens.length} mensagem(ns) conferida(s), ${reprovados.length} reprovada(s).`);
+  return reprovados.length ? 1 : 0;
+}
+
+// Modo --pr: só o título e a descrição do pull request.
+function conferirPr() {
+  const titulo = (process.env.TITULO_PR ?? '').trim();
+  if (!titulo) {
+    console.error('Modo --pr: a variável TITULO_PR está vazia.');
+    return 2;
+  }
+  const corpo = process.env.CORPO_PR ?? '';
+  return relatar([
+    { rotulo: `título do PR: ${titulo}`, problemas: problemasDaMensagem(`${titulo}\n\n${corpo}`) },
+  ]);
+}
+
 function principal() {
   const [base, ponta = 'HEAD'] = process.argv.slice(2);
+  if (base === '--pr') return conferirPr();
   if (!base) {
     console.error('Uso: node tools/verificar-commits.mjs <base> [<ponta>]   (exemplo: origin/main)');
     return 2;
@@ -89,13 +117,7 @@ function principal() {
     itens.push({ rotulo: `título do PR: ${tituloDoPr}`, problemas: problemasDoAssunto(tituloDoPr.trim()) });
   }
 
-  const reprovados = itens.filter((item) => item.problemas.length);
-  for (const item of reprovados) {
-    console.error(`REPROVADO  ${item.rotulo}`);
-    for (const problema of item.problemas) console.error(`           - ${problema}`);
-  }
-  console.log(`${itens.length} mensagem(ns) conferida(s), ${reprovados.length} reprovada(s).`);
-  return reprovados.length ? 1 : 0;
+  return relatar(itens);
 }
 
 // Executado direto pela linha de comando (e não importado por um teste).
