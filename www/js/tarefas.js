@@ -8,7 +8,18 @@ import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esqu
 import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
 import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
 import { pedirPermissaoSeFaltar } from './lembretes.js';
-import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
+import {
+  h,
+  icone,
+  abrirFolha,
+  abrirMenu,
+  aoSegurar,
+  confirmar,
+  campo,
+  estadoVazio,
+  redesenhar,
+  vibrar,
+} from './ui.js';
 
 let concluidasAbertas = false;
 
@@ -510,13 +521,17 @@ function render(raiz) {
       },
       icone('estrela', { cheio: true, tam: 18 }),
     ),
-    estado.listas.map((l) =>
-      h(
+    estado.listas.map((l) => {
+      const chip = h(
         'button',
         { type: 'button', class: `chip${ativa?.id === l.id ? ' ativo' : ''}`, onclick: () => irPara(l.id) },
         l.nome,
-      ),
-    ),
+      );
+      // Segurar o nome da lista abre o menu dela (renomear, mover na faixa, excluir), sem
+      // precisar abrir a lista antes. O mesmo menu continua no botão de opções do cabeçalho.
+      aoSegurar(chip, () => menuLista(l));
+      return chip;
+    }),
     h(
       'button',
       { type: 'button', class: 'chip fantasma', onclick: () => editarLista(null) },
