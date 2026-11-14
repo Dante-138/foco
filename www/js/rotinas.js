@@ -9,6 +9,16 @@ import { LIMITES } from './nucleo/esquema.js';
 import { textoParaItens, itensParaTexto } from './nucleo/rotina-texto.js';
 import { desmarcarBloco, emAreas, marcarBloco, semAsUltimas } from './nucleo/rotina-ordem.js';
 import {
+  campoDoNome,
+  desfazerEdicao,
+  emEdicao,
+  entrarNaEdicao,
+  refazerEdicao,
+  listaEmEdicao,
+  sairDaEdicao,
+  terminarEdicaoAberta,
+} from './rotina-edicao.js';
+import {
   h,
   icone,
   abrirFolha,
@@ -102,6 +112,29 @@ function alternarSecao(rotina, bloco, marcar) {
   if (marcar && mudam.length) anotarLote(rotina, mudam.length);
   if (!marcar) lotes.delete(rotina.id);
   vibrar(marcar ? 'concluido' : 'toque');
+  salvar();
+  redesenhar();
+}
+
+// Item que vai ser tirado da rotina: a marca do dia dele sai junto. O hábito ligado
+// continua como está: tirar o item da lista não desfaz o que já foi feito.
+function esquecerMarca(rotina, item) {
+  const marcas = marcasDeHoje();
+  const atuais = marcas[rotina.id] ?? [];
+  if (!atuais.includes(item.id)) return;
+  marcas[rotina.id] = atuais.filter((id) => id !== item.id);
+  lotes.delete(rotina.id);
+}
+
+// "Excluir itens marcados", como no Keep: tira da rotina os itens marcados hoje.
+async function excluirMarcados(rotina) {
+  const marcadas = new Set(marcasDeHoje()[rotina.id] ?? []);
+  const n = rotina.itens.filter((i) => marcadas.has(i.id)).length;
+  if (!n) return;
+  if (!(await confirmar(`Excluir ${n} ${n === 1 ? 'item marcado' : 'itens marcados'} desta rotina?`))) return;
+  rotina.itens = rotina.itens.filter((i) => !marcadas.has(i.id));
+  delete marcasDeHoje()[rotina.id];
+  lotes.delete(rotina.id);
   salvar();
   redesenhar();
 }
@@ -288,8 +321,9 @@ async function excluirRotina(rotina) {
 }
 
 function menuRotina(rotina) {
+  const temMarcados = Boolean(marcasDeHoje()[rotina.id]?.length);
   abrirMenu(rotina.nome, [
-    { rotulo: 'Editar rotina', acao: () => editarRotina(rotina) },
+    { rotulo: 'Editar como texto', acao: () => editarRotina(rotina) },
     {
       rotulo: 'Marcados no fim',
       marcado: estado.marcadosNoFim,
@@ -300,7 +334,13 @@ function menuRotina(rotina) {
       },
     },
     { rotulo: 'Ligar itens a hábitos', acao: () => abrirLigacoes(rotina) },
-    { rotulo: 'Desmarcar tudo', acao: () => desmarcarTudo(rotina) },
+    { rotulo: 'Desmarcar todos', desativado: !temMarcados, acao: () => desmarcarTudo(rotina) },
+    {
+      rotulo: 'Excluir itens marcados',
+      perigo: true,
+      desativado: !temMarcados,
+      acao: () => excluirMarcados(rotina),
+    },
     { rotulo: 'Excluir rotina', perigo: true, acao: () => excluirRotina(rotina) },
   ]);
 }
@@ -399,7 +439,7 @@ function areasDaRotina(rotina, marcadas, comHoras) {
                 redesenhar();
               },
             },
-            `Marcados (${quantos})`,
+            `${quantos} ${quantos === 1 ? 'item marcado' : 'itens marcados'}`,
             icone(marcadosAbertos ? 'cima' : 'baixo'),
           ),
           marcadosAbertos ? h('ul', {}, linhasDe(marcados)) : null,
@@ -411,8 +451,80 @@ function areasDaRotina(rotina, marcadas, comHoras) {
 // Botão flutuante da aba: desfazer, sempre ao alcance enquanto houver marca hoje.
 function acaoFlutuante() {
   const ativa = estado.rotinas.find((r) => r.id === estado.rotinaAtiva);
-  if (!ativa || !marcasDeHoje()[ativa.id]?.length) return null;
+  if (!ativa || emEdicao(ativa) || !marcasDeHoje()[ativa.id]?.length) return null;
   return { icone: 'desfazer', rotulo: 'Desfazer a última marca', acao: () => desfazerUltimaMarca(ativa) };
+}
+
+function cabecalhoDaRotina(ativa, totalDeItens, feitos) {
+  return h(
+    'div',
+    { class: 'cabecalho' },
+    h(
+      'div',
+      {},
+      h('h2', {}, ativa.nome),
+      h('p', { class: 'sub' }, totalDeItens ? `${feitos} de ${totalDeItens} hoje` : 'Sem itens'),
+    ),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'botao-icone',
+        'aria-label': 'Editar itens',
+        onclick: () => entrarNaEdicao(ativa),
+      },
+      icone('lapis'),
+    ),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'botao-icone',
+        'aria-label': 'Opções da rotina',
+        onclick: () => menuRotina(ativa),
+      },
+      icone('pontos'),
+    ),
+  );
+}
+
+function cabecalhoEmEdicao(ativa) {
+  return h(
+    'div',
+    { class: 'cabecalho' },
+    h('div', {}, campoDoNome(ativa)),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'botao-icone',
+        'aria-label': 'Desfazer edição',
+        onclick: () => desfazerEdicao(ativa),
+      },
+      icone('desfazer'),
+    ),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'botao-icone',
+        'aria-label': 'Refazer edição',
+        onclick: () => refazerEdicao(ativa),
+      },
+      icone('refazer'),
+    ),
+    h(
+      'button',
+      { type: 'button', class: 'botao cheio', onclick: () => sairDaEdicao(ativa) },
+      'Concluir edição',
+    ),
+  );
+}
+
+function corpoDaRotina(ativa, { editando, marcadas, comHoras, temItens }) {
+  if (editando) return [listaEmEdicao(ativa, { aoRemoverItem: (item) => esquecerMarca(ativa, item) })];
+  if (temItens) return areasDaRotina(ativa, marcadas, comHoras);
+  return [estadoVazio('Rotina vazia', 'Toque em + para adicionar o primeiro item.')];
 }
 
 function render(raiz) {
@@ -442,6 +554,7 @@ function render(raiz) {
           type: 'button',
           class: `chip${r.id === ativa.id ? ' ativo' : ''}`,
           onclick: () => {
+            terminarEdicaoAberta();
             estado.rotinaAtiva = r.id;
             salvar();
             redesenhar();
@@ -450,47 +563,51 @@ function render(raiz) {
         r.nome,
       ),
     ),
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'chip fantasma',
+        onclick: () => {
+          terminarEdicaoAberta();
+          editarRotina(null);
+        },
+      },
+      icone('mais', { tam: 18 }),
+      'Nova rotina',
+    ),
   );
 
+  const editando = emEdicao(ativa);
   raiz.replaceChildren(
     faixa,
-    h(
-      'div',
-      { class: 'cabecalho' },
-      h(
-        'div',
-        {},
-        h('h2', {}, ativa.nome),
-        h('p', { class: 'sub' }, itens.length ? `${feitos} de ${itens.length} hoje` : 'Sem itens'),
-      ),
-      h(
-        'button',
-        {
-          type: 'button',
-          class: 'botao-icone',
-          'aria-label': 'Opções da rotina',
-          onclick: () => menuRotina(ativa),
-        },
-        icone('pontos'),
-      ),
-    ),
-    h(
-      'div',
-      { class: 'progresso' },
-      h('div', { class: 'progresso-barra', style: { width: `${porcento}%` } }),
-    ),
-    ...(itens.length
-      ? areasDaRotina(ativa, marcadas, comHoras)
-      : [estadoVazio('Rotina vazia', 'Abra o menu e toque em Editar rotina.')]),
+    editando ? cabecalhoEmEdicao(ativa) : cabecalhoDaRotina(ativa, itens.length, feitos),
+    editando
+      ? null
+      : h(
+          'div',
+          { class: 'progresso' },
+          h('div', { class: 'progresso-barra', style: { width: `${porcento}%` } }),
+        ),
+    ...corpoDaRotina(ativa, { editando, marcadas, comHoras, temItens: itens.length > 0 }),
   );
   faixa.scrollLeft = rolagemFaixa;
 }
 
+const rotinaAtiva = () => estado.rotinas.find((r) => r.id === estado.rotinaAtiva) ?? estado.rotinas[0];
+
 export const rotinas = {
   id: 'rotinas',
   titulo: 'Rotinas',
-  rotuloAdicionar: 'Nova rotina',
+  // Com rotina, o "+" adiciona um item nela, como no Keep; sem nenhuma, cria a primeira.
+  get rotuloAdicionar() {
+    return estado.rotinas.length ? 'Novo item' : 'Nova rotina';
+  },
   render,
-  aoAdicionar: () => editarRotina(null),
+  aoAdicionar: () => {
+    const ativa = rotinaAtiva();
+    if (ativa) entrarNaEdicao(ativa, { adicionar: true });
+    else editarRotina(null);
+  },
   flutuante: acaoFlutuante,
 };

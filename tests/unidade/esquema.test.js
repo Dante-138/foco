@@ -178,7 +178,7 @@ test('nome de rotina é aparado, cortado no limite e nunca fica vazio', () => {
   assert.deepEqual(estado.rotinas[2], { id: 'c', nome: 'Rotina', itens: [] });
 });
 
-test('item sem texto é descartado; tipo desconhecido vira item; seção não tem hora', () => {
+test('item sem texto sai sem aviso; tipo desconhecido vira item; seção não tem hora', () => {
   const { estado, avisos } = limpar({
     rotinas: [
       {
@@ -198,7 +198,7 @@ test('item sem texto é descartado; tipo desconhecido vira item; seção não te
     { id: '3', tipo: 'secao', texto: 'Seção', hora: null, habitoId: null },
     { id: '4', tipo: 'item', texto: 'x'.repeat(LIMITES.textoItem), hora: null, habitoId: null },
   ]);
-  assert.equal(avisos.length, 2);
+  assert.equal(avisos.length, 1); // só o do tipo desconhecido
 });
 
 test('hora inválida do item vira null', () => {
