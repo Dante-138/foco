@@ -116,6 +116,13 @@ Todo pull request tem a `main` como base: uma mudança por vez, sem pilha de PRs
 reprova o PR que aponta para outra branch, inclusive quando a base é trocada depois de aberto.
 Mesclar em outra branch não passa pela proteção da `main`, e a mudança fica fora dela.
 
+Fora do portão, o workflow `Análise` roda em todo PR, na `main` e uma vez por semana:
+
+- **CodeQL**, a análise estática do GitHub, no JavaScript do app e nos workflows. Os resultados
+  ficam na aba Security do repositório.
+- **Dependências**: reprova o PR que traz dependência com vulnerabilidade conhecida.
+- **Workflows**: o actionlint confere a sintaxe e os scripts de shell dos próprios workflows.
+
 ## Estrutura
 
 O código tem duas camadas, e o lint impede que elas se misturem.

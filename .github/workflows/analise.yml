@@ -1,0 +1,80 @@
+name: Análise
+
+# Análises de segurança, fora do portão do dia a dia: procuram falhas no código do app, nas
+# dependências que um PR traz e nos próprios workflows.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Toda segunda-feira, 06:17 UTC: pega falha recém-descoberta em código que não mudou.
+    - cron: '17 6 * * 1'
+
+# O token do workflow só lê o repositório; o CodeQL pede, no próprio job, o que precisa a mais.
+permissions:
+  contents: read
+
+concurrency:
+  group: analise-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Análise estática do GitHub sobre o JavaScript do app e sobre os workflows.
+  # O Java do projeto Android fica de fora: são dois arquivos pequenos, e analisá-los exigiria
+  # compilar o projeto com o Gradle a cada rodada.
+  codeql:
+    name: CodeQL (${{ matrix.linguagem }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # publicar os resultados na aba Security do repositório
+    strategy:
+      fail-fast: false
+      matrix:
+        linguagem: [javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.linguagem }}
+          build-mode: none
+
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.linguagem }}
+
+  # Reprova o PR que acrescenta ou atualiza uma dependência com vulnerabilidade conhecida.
+  dependencias:
+    name: Dependências
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: never
+
+  # Confere os próprios workflows: sintaxe, expressões e os scripts de shell dentro deles.
+  # A imagem é fixada pelo digest, como as actions são fixadas pelo hash do commit.
+  workflows:
+    name: Workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: -color
