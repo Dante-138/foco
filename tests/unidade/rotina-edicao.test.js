@@ -4,6 +4,7 @@ import {
   inserirDepois,
   inserirNoFimDoBloco,
   limparVazios,
+  naOrdem,
   remover,
 } from '../../www/js/nucleo/rotina-edicao.js';
 
@@ -88,4 +89,17 @@ test('nenhuma função altera a lista recebida', () => {
   remover(ROTINA, 'a');
   limparVazios(ROTINA, 300);
   assert.deepEqual(ROTINA, copia);
+});
+
+test('na ordem dos ids: segue a tela, ignora id desconhecido e não perde item', () => {
+  assert.deepEqual(ids(naOrdem(ROTINA, ['c', 'NOITE', 'solto', 'MANHÃ', 'a', 'b'])), [
+    'c',
+    'NOITE',
+    'solto',
+    'MANHÃ',
+    'a',
+    'b',
+  ]);
+  assert.deepEqual(ids(naOrdem(ROTINA, ['b', 'fantasma', 'a'])), ['b', 'a', 'solto', 'MANHÃ', 'NOITE', 'c']);
+  assert.deepEqual(naOrdem([], ['x']), []);
 });
