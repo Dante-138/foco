@@ -320,10 +320,40 @@ async function excluirRotina(rotina) {
   redesenhar();
 }
 
+// "Fazer uma cópia", como no Keep: mesmos itens e ligações, ids novos, sem as marcas do dia.
+// A cópia entra logo depois da original e já fica aberta.
+function copiarRotina(rotina) {
+  const nome = `${rotina.nome} (cópia)`.slice(0, LIMITES.nomeRotina);
+  const copia = { id: uid(), nome, itens: rotina.itens.map((item) => ({ ...item, id: uid() })) };
+  estado.rotinas.splice(estado.rotinas.indexOf(rotina) + 1, 0, copia);
+  estado.rotinaAtiva = copia.id;
+  salvar();
+  redesenhar();
+}
+
+// A ordem das rotinas na faixa do topo é a ordem em que estão guardadas.
+function moverRotina(rotina, passo) {
+  const de = estado.rotinas.indexOf(rotina);
+  const para = de + passo;
+  if (de < 0 || para < 0 || para >= estado.rotinas.length) return;
+  estado.rotinas.splice(de, 1);
+  estado.rotinas.splice(para, 0, rotina);
+  salvar();
+  redesenhar();
+}
+
 function menuRotina(rotina) {
+  const posicao = estado.rotinas.indexOf(rotina);
   const temMarcados = Boolean(marcasDeHoje()[rotina.id]?.length);
   abrirMenu(rotina.nome, [
     { rotulo: 'Editar como texto', acao: () => editarRotina(rotina) },
+    { rotulo: 'Fazer uma cópia', acao: () => copiarRotina(rotina) },
+    { rotulo: 'Mover para a esquerda', desativado: posicao === 0, acao: () => moverRotina(rotina, -1) },
+    {
+      rotulo: 'Mover para a direita',
+      desativado: posicao === estado.rotinas.length - 1,
+      acao: () => moverRotina(rotina, 1),
+    },
     {
       rotulo: 'Marcados no fim',
       marcado: estado.marcadosNoFim,
@@ -592,6 +622,8 @@ function render(raiz) {
     ...corpoDaRotina(ativa, { editando, marcadas, comHoras, temItens: itens.length > 0 }),
   );
   faixa.scrollLeft = rolagemFaixa;
+  // A rotina aberta fica sempre à vista na faixa (ela pode ter mudado de lugar ou ser uma cópia nova).
+  faixa.querySelector('.chip.ativo')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 const rotinaAtiva = () => estado.rotinas.find((r) => r.id === estado.rotinaAtiva) ?? estado.rotinas[0];
