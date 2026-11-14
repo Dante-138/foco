@@ -330,6 +330,10 @@ ul {
   font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
+  /* Segurar o nome de uma lista abre o menu dela: não seleciona o texto nem chama o menu do sistema. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .chip.ativo {
