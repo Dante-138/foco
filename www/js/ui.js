@@ -328,10 +328,32 @@ export function estadoVazio(titulo, dica, { compacto = false } = {}) {
   );
 }
 
-export function avisar(texto) {
-  const el = h('div', { class: 'aviso', role: 'status' }, texto);
+// Aviso curto perto do rodapé, que some sozinho. Com "acao" ({ rotulo, executar }) ganha um
+// botão, como o "Desfazer" depois de uma exclusão: tocar executa e fecha o aviso.
+// Um aviso novo substitui o anterior, e com ele vai embora a ação que o anterior oferecia.
+const AVISO_MS = 4000;
+
+export function avisar(texto, { acao = null, duracao = AVISO_MS } = {}) {
+  for (const anterior of document.querySelectorAll('.aviso')) anterior.remove();
+  const el = h('div', { class: `aviso${acao ? ' com-acao' : ''}`, role: 'status' }, texto);
+  if (acao) {
+    el.append(
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'aviso-acao',
+          onclick: () => {
+            el.remove();
+            acao.executar();
+          },
+        },
+        acao.rotulo,
+      ),
+    );
+  }
   document.body.append(el);
-  setTimeout(() => el.remove(), 4000);
+  setTimeout(() => el.remove(), duracao);
 }
 
 // Segurar o dedo (ou o botão do mouse) sobre o elemento chama "acao", e o clique que

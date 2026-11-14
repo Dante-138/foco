@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  devolver,
   inserirDepois,
   inserirNoFimDoBloco,
   limparVazios,
@@ -88,7 +89,38 @@ test('nenhuma função altera a lista recebida', () => {
   inserirNoFimDoBloco(ROTINA, 'MANHÃ', NOVO);
   remover(ROTINA, 'a');
   limparVazios(ROTINA, 300);
+  devolver(ROTINA.slice(2), ROTINA, ['solto', 'MANHÃ']);
   assert.deepEqual(ROTINA, copia);
+});
+
+test('devolver: os itens excluídos voltam ao lugar que tinham', () => {
+  const sem = (...fora) => ROTINA.filter((i) => !fora.includes(i.id));
+  // Do começo, do meio e do fim de uma vez.
+  assert.deepEqual(ids(devolver(sem('solto', 'b', 'c'), ROTINA, ['solto', 'b', 'c'])), ids(ROTINA));
+  // Dois seguidos voltam na ordem de antes.
+  assert.deepEqual(ids(devolver(sem('a', 'b'), ROTINA, ['a', 'b'])), ids(ROTINA));
+  // Lista vazia recebe tudo de volta; id que já está na lista não duplica.
+  assert.deepEqual(ids(devolver([], ROTINA, ids(ROTINA))), ids(ROTINA));
+  assert.deepEqual(ids(devolver(ROTINA, ROTINA, ['a'])), ids(ROTINA));
+});
+
+test('devolver: respeita o que mudou na lista depois da exclusão', () => {
+  const semB = remover(ROTINA, 'b');
+  // Entrou um item novo depois de "a": "b" volta logo depois de "a", e o novo fica.
+  assert.deepEqual(ids(devolver(inserirDepois(semB, 'a', NOVO), ROTINA, ['b'])), [
+    'solto',
+    'MANHÃ',
+    'a',
+    'b',
+    'novo',
+    'NOITE',
+    'c',
+  ]);
+  // O vizinho "a" foi apagado por outro caminho: ele não volta, e "b" entra depois de quem sobrou.
+  assert.deepEqual(ids(devolver(remover(semB, 'a'), ROTINA, ['b'])), ['solto', 'MANHÃ', 'b', 'NOITE', 'c']);
+  // A ordem dos que ficaram mudou: vale a posição de agora do vizinho.
+  const trocada = naOrdem(semB, ['NOITE', 'c', 'solto', 'MANHÃ', 'a']);
+  assert.deepEqual(ids(devolver(trocada, ROTINA, ['b'])), ['NOITE', 'c', 'solto', 'MANHÃ', 'a', 'b']);
 });
 
 test('na ordem dos ids: segue a tela, ignora id desconhecido e não perde item', () => {

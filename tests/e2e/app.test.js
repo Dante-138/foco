@@ -627,6 +627,55 @@ test('rotina: "Excluir itens marcados" e "Desmarcar todos" no menu, como no Keep
   assert.deepEqual(erros, []);
 });
 
+test('rotina: depois de "Excluir itens marcados", o Desfazer devolve os itens no lugar e marcados', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const textos = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
+  const rotinaSalva = async () => {
+    const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
+    return {
+      itens: salvo.rotinas[0].itens.map((i) => i.texto),
+      marcas: Object.values(salvo.marcasRotina.porRotina)[0]?.length ?? 0,
+    };
+  };
+  const excluirMarcados = async () => {
+    await botao(pagina, 'Opções da rotina').click();
+    await botao(pagina, 'Excluir itens marcados').click();
+    await botao(pagina, 'Excluir').click();
+    await visivel(pagina.getByText('2 itens excluídos'));
+  };
+
+  await criarRotinaDaManha(pagina);
+  const antes = await rotinaSalva();
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).click();
+  await visivel(botao(pagina, '2 itens marcados'));
+
+  await excluirMarcados();
+  await visivel(pagina.getByText('0 de 2 hoje'));
+  assert.deepEqual(await rotinaSalva(), {
+    itens: ['ACORDAR', 'Beber água', 'Arrumar a cama', 'SAIR'],
+    marcas: 0,
+  });
+
+  // Desfazer: os dois voltam para a seção de antes, marcados como estavam, e o aviso sai.
+  await botao(pagina, 'Desfazer').click();
+  await visivel(pagina.getByText('2 de 4 hoje'));
+  assert.deepEqual(await textos('.area-marcados'), ['Levantar', 'Pegar a chave']);
+  assert.deepEqual(await textos('.area-pendentes'), ['Beber água', 'Arrumar a cama']);
+  assert.deepEqual(await rotinaSalva(), { itens: antes.itens, marcas: 2 });
+  assert.equal(await pagina.locator('.aviso').count(), 0);
+
+  // Sem tocar em Desfazer, o aviso some sozinho em uns 5 segundos e a exclusão fica.
+  await excluirMarcados();
+  await pagina.waitForFunction(() => !document.querySelector('.aviso'), null, { timeout: 9000 });
+  assert.equal(await botao(pagina, 'Desfazer').count(), 0);
+  assert.deepEqual(await rotinaSalva(), {
+    itens: ['ACORDAR', 'Beber água', 'Arrumar a cama', 'SAIR'],
+    marcas: 0,
+  });
+  assert.deepEqual(erros, []);
+});
+
 test('rotina: na edição, a alça arrasta um item para outra seção e uma seção com o bloco inteiro', async (t) => {
   const item = (id, texto) => ({ id, tipo: 'item', texto, hora: null, habitoId: null });
   const secao = (id, texto) => ({ id, tipo: 'secao', texto, hora: null, habitoId: null });

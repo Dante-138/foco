@@ -8,6 +8,7 @@ import { registroAposItem, sugerirHabito } from './nucleo/ligacao.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { textoParaItens, itensParaTexto } from './nucleo/rotina-texto.js';
 import { desmarcarBloco, emAreas, marcarBloco, semAsUltimas } from './nucleo/rotina-ordem.js';
+import { devolver } from './nucleo/rotina-edicao.js';
 import {
   campoDoNome,
   desfazerEdicao,
@@ -164,14 +165,54 @@ function esquecerMarca(rotina, item) {
 }
 
 // "Excluir itens marcados", como no Keep: tira da rotina os itens marcados hoje.
+// Depois de confirmar, um aviso com "Desfazer" fica alguns segundos na tela.
+const DESFAZER_EXCLUSAO_MS = 5000;
+
 async function excluirMarcados(rotina) {
-  const marcadas = new Set(marcasDeHoje()[rotina.id] ?? []);
-  const n = rotina.itens.filter((i) => marcadas.has(i.id)).length;
+  const marcas = marcasDeHoje();
+  const marcasDeAntes = marcas[rotina.id] ?? [];
+  const marcadas = new Set(marcasDeAntes);
+  const removidos = rotina.itens.filter((i) => marcadas.has(i.id)).map((i) => i.id);
+  const n = removidos.length;
   if (!n) return;
   if (!(await confirmar(`Excluir ${n} ${n === 1 ? 'item marcado' : 'itens marcados'} desta rotina?`))) return;
+
+  const antes = {
+    itens: rotina.itens,
+    removidos,
+    marcas: marcasDeAntes,
+    lote: lotes.get(rotina.id),
+    dia: estado.marcasRotina.data,
+  };
   rotina.itens = rotina.itens.filter((i) => !marcadas.has(i.id));
-  delete marcasDeHoje()[rotina.id];
+  delete marcas[rotina.id];
   lotes.delete(rotina.id);
+  salvar();
+  redesenhar();
+  avisar(n === 1 ? '1 item excluído' : `${n} itens excluídos`, {
+    duracao: DESFAZER_EXCLUSAO_MS,
+    acao: { rotulo: 'Desfazer', executar: () => desfazerExclusao(rotina, antes) },
+  });
+}
+
+// Devolve os itens excluídos ao lugar que tinham e, se ainda é o mesmo dia, as marcas deles.
+// O que mudou na rotina depois da exclusão fica como está (ver "devolver").
+function desfazerExclusao(rotina, antes) {
+  if (!estado.rotinas.includes(rotina)) return; // a rotina foi excluída nesse meio-tempo
+  const itens = devolver(rotina.itens, antes.itens, antes.removidos);
+  if (itens.length > LIMITES.itensPorRotina) {
+    avisar(`Uma rotina pode ter até ${LIMITES.itensPorRotina} linhas.`);
+    return;
+  }
+  rotina.itens = itens;
+
+  const marcas = marcasDeHoje();
+  if (estado.marcasRotina.data === antes.dia) {
+    const deAgora = marcas[rotina.id] ?? [];
+    marcas[rotina.id] = [...new Set([...antes.marcas, ...deAgora])];
+    // O desfazer por lote (seção marcada de uma vez) só volta se nada foi marcado depois.
+    if (antes.lote && !deAgora.length) lotes.set(rotina.id, antes.lote);
+  }
   salvar();
   redesenhar();
 }
