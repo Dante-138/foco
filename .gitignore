@@ -2,6 +2,7 @@
 referencias/
 
 node_modules/
+.stryker-tmp/
 
 # Assinatura do APK: a chave e a senha ficam fora do repositório, sempre.
 # Estas linhas são só uma barreira a mais, caso alguém copie os arquivos para cá.

@@ -28,7 +28,7 @@ const ARMAZENAMENTO = ['localStorage', 'sessionStorage', 'indexedDB'].map((name)
 
 export default [
   // android/ é o projeto nativo gerado pelo Capacitor (inclui uma cópia de www/).
-  { ignores: ['node_modules/', 'referencias/', 'dist/', 'android/'] },
+  { ignores: ['node_modules/', 'referencias/', 'dist/', 'android/', '.stryker-tmp/'] },
 
   {
     linterOptions: {
