@@ -22,6 +22,25 @@ export function inserirNoFimDoBloco(itens, idDaSecao, novo) {
 
 export const remover = (itens, id) => itens.filter((item) => item.id !== id);
 
+// Desfaz uma exclusão. "antes" é a lista como era; "removidos", os ids que saíram dela.
+// Cada item removido volta para logo depois do vizinho que tinha em "antes" e que ainda
+// existe (ou para o começo, se não sobrou nenhum antes dele). A lista de agora pode ter
+// mudado nesse meio-tempo: o que entrou fica, e o que foi apagado por outro caminho não volta.
+export function devolver(itens, antes, removidos) {
+  const quais = new Set(removidos);
+  const resultado = [...itens];
+  let ultimo = -1; // posição, no resultado, do último item de "antes" que já está no lugar
+  for (const item of antes) {
+    const onde = resultado.findIndex((atual) => atual.id === item.id);
+    if (onde >= 0) ultimo = onde;
+    else if (quais.has(item.id)) {
+      ultimo += 1;
+      resultado.splice(ultimo, 0, item);
+    }
+  }
+  return resultado;
+}
+
 // Fim da edição: textos aparados e cortados no limite; item ou seção sem texto sai.
 export function limparVazios(itens, limiteDoTexto) {
   return itens

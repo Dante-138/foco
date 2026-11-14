@@ -425,6 +425,23 @@ ul {
   font-size: 14px;
 }
 
+/* Aviso com botão: o "Desfazer" depois de uma exclusão. */
+.aviso.com-acao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 16px;
+}
+
+.aviso-acao {
+  flex: none;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #8ab4f8; /* azul claro, legível sobre o fundo escuro do aviso nos dois temas */
+  font-weight: 600;
+}
+
 /* --------------------------------------------------------------- rotinas */
 
 .progresso {
