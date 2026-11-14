@@ -105,7 +105,9 @@ A regra vale também para o dono do repositório. O portão confere, nesta ordem
    Além dos erros comuns, o lint impõe a estrutura descrita abaixo.
 3. **Formatação** conferida pelo Prettier.
 4. **Testes de unidade** com cobertura de 100% de linhas, desvios e funções do núcleo.
-   Um módulo novo no núcleo sem teste reprova.
+   Um módulo novo no núcleo sem teste reprova. Parte deles é por propriedade (fast-check): centenas
+   de dados gerados, muitos malformados, conferem que ler os dados salvos nunca lança exceção,
+   que validar de novo não muda nada e que a migração e o backup não perdem dados.
 5. **Testes de ponta a ponta** em um Chrome real: os fluxos das três abas, o tema, dados
    salvos com problema, duas abas abertas e a política de segurança. Qualquer erro no console
    da página reprova.
