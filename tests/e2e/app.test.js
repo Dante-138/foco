@@ -1248,6 +1248,13 @@ test('tarefas: mover a lista para os lados muda a ordem na faixa do topo', async
   assert.deepEqual(erros, []);
 });
 
+test('ajustes: mostra a versão; fora de um build, diz que é desenvolvimento', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  await botao(pagina, 'Ajustes').click();
+  await visivel(pagina.getByText(/^Versão \d+\.\d+\.\d+ · desenvolvimento$/));
+  assert.deepEqual(erros, []);
+});
+
 test('tarefas: segurar o nome de uma lista abre o menu dela, sem trocar de lista', async (t) => {
   const salvo = JSON.stringify({
     versao: 5,

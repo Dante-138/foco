@@ -83,6 +83,9 @@ jobs:
       - name: Copiar o app web para o projeto Android
         run: npx cap sync android
 
+      - name: Carimbar o build (versão, commit e data em Ajustes)
+        run: node tools/carimbar-build.mjs
+
       - name: Compilar o APK de depuração
         working-directory: android
         run: sh ./gradlew --no-daemon --console=plain assembleDebug

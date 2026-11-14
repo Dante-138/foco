@@ -91,6 +91,8 @@ pwsh tools/apk.ps1 -AceitoLicencaAndroid
 - No fim o script apaga do Docker tudo o que criou (imagem, volume e construtor de build) e
   nada além disso. Para vários builds seguidos, use `-Manter` e termine com `-Limpar`.
 - `-Simular` mostra os comandos sem executar.
+- O APK leva um carimbo com a versão, o commit e a data do build, mostrado no fim de Ajustes.
+  É o que identifica o app instalado ao relatar um defeito.
 - `-Tipo debug` gera `saida/foco-debug.apk`: o mesmo app, com a mesma chave, mas
   inspecionável pelo cabo USB. Um instala por cima do outro sem apagar os dados.
 
