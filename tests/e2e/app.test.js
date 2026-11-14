@@ -31,13 +31,17 @@ after(async () => {
 // Abre o app em um contexto isolado. "salvo" é o texto gravado no
 // armazenamento antes de o app carregar (undefined = nada salvo). "toque" liga a
 // tela de toque no navegador, para os testes de gesto.
-async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false, preparar } = {}) {
+async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false, celular = false, preparar } = {}) {
   const contexto = await navegador.newContext({
     viewport: { width: 500, height: 1000 },
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     colorScheme: esquemaDeCor,
-    hasTouch: toque,
+    hasTouch: toque || celular,
+    // celular: tela do Galaxy A36 com a regra de janela do Chrome do Android (meta viewport).
+    ...(celular
+      ? { isMobile: true, viewport: { width: 501, height: 1085 }, deviceScaleFactor: 2.15625 }
+      : {}),
   });
   t.after(() => contexto.close());
   await preparar?.(contexto); // para o teste instalar algo antes de o app carregar
@@ -1373,6 +1377,38 @@ test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => 
   await deslizar(pagina, [250, 500], [280, 500]);
   await visivel(pagina.getByText('Nenhum hábito ainda'));
   assert.equal(await pagina.title(), 'Hábitos - Foco');
+  assert.deepEqual(erros, []);
+});
+
+test('trocar de aba não tira o botão + do lugar, nem por um quadro (Chrome do Android)', async (t) => {
+  // Regressão: a animação de entrada desloca o conteúdo 28 px para a direita. Sem o corte na raiz
+  // da página, o Chrome do Android alarga a janela de layout e o + pula por uns 200 ms.
+  const { pagina, erros } = await abrir(t, { celular: true });
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+  // Todas as abas da barra, da esquerda para a direita e de volta: as duas direções da animação.
+  const nomes = (await pagina.locator('#abas button').allTextContents()).map((nome) => nome.trim());
+  assert.ok(nomes.length >= 3, `abas na barra: ${nomes.join(', ')}`);
+  for (const destino of [...nomes, ...nomes.toReversed().slice(1)]) {
+    const posicoes = await pagina.evaluate(async (nome) => {
+      const fab = document.getElementById('fab');
+      const vistas = new Set();
+      const anotar = () => {
+        const r = fab.getBoundingClientRect();
+        vistas.add(`${Math.round(r.left)},${Math.round(r.top)}`);
+      };
+      anotar();
+      [...document.querySelectorAll('#abas button')].find((b) => b.textContent.trim() === nome).click();
+      const t0 = performance.now();
+      while (performance.now() - t0 < 400) {
+        anotar();
+        await new Promise((f) => {
+          requestAnimationFrame(f);
+        });
+      }
+      return [...vistas];
+    }, destino);
+    assert.equal(posicoes.length, 1, `indo para ${destino}, o + passou por ${posicoes.join(' | ')}`);
+  }
   assert.deepEqual(erros, []);
 });
 
