@@ -9,6 +9,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Plugin local de resposta tátil (HapticaPlugin.java): o registro vem antes do onCreate.
+        registerPlugin(HapticaPlugin.class);
         super.onCreate(savedInstanceState);
 
         // O botão voltar do Android anda para trás no histórico da página: é assim que o app

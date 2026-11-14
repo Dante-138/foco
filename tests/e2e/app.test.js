@@ -336,6 +336,118 @@ test('rotina: o que foi digitado na edição é gravado na hora em que o app vai
   assert.deepEqual(erros, []);
 });
 
+test('rotina: ao marcar, o item fica marcado no lugar um instante e depois vai para os marcados', async (t) => {
+  const { pagina, erros } = await abrir(t);
+
+  await criarRotinaDaManha(pagina);
+
+  // O toque e a leitura no mesmo passo, para ver a tela logo depois do toque.
+  const logoDepois = await pagina.evaluate((chave) => {
+    const botaoDoItem = [...document.querySelectorAll('.area-pendentes .rotina-item')].find((b) =>
+      b.textContent.includes('Levantar'),
+    );
+    botaoDoItem.click();
+    const linha = botaoDoItem.closest('li');
+    return {
+      naAreaDeCima: Boolean(linha.closest('.area-pendentes')),
+      classes: [...botaoDoItem.classList],
+      marcado: botaoDoItem.getAttribute('aria-checked'),
+      saindo: linha.classList.contains('mudando-de-area'),
+      gravado: Object.values(JSON.parse(localStorage.getItem(chave)).marcasRotina.porRotina)[0]?.length,
+    };
+  }, CHAVE);
+  assert.deepEqual(logoDepois, {
+    naAreaDeCima: true,
+    classes: ['rotina-item', 'feito', 'marcando'],
+    marcado: 'true',
+    saindo: true,
+    gravado: 1,
+  });
+
+  // Depois da animação, o item chega na área de marcados, e o contador reage.
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  const chegada = pagina.locator('.area-marcados .rotina-item', { hasText: 'Levantar' });
+  await visivel(chegada);
+  assert.ok((await chegada.evaluate((el) => [...el.classList])).includes('chegou'));
+  assert.ok((await pagina.locator('.concluidas-topo').evaluate((el) => [...el.classList])).includes('pulsa'));
+
+  // Desmarcar lá embaixo faz o caminho de volta.
+  await chegada.click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  await visivel(pagina.locator('.area-pendentes .rotina-item.chegou', { hasText: 'Levantar' }));
+  assert.equal(await pagina.locator('.area-marcados').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
+test('resposta tátil: no app Android vai pelos efeitos do sistema; marcar, concluir, desmarcar e rajada', async (t) => {
+  const comMotor = (contexto) =>
+    contexto.addInitScript(() => {
+      window.hapticas = [];
+      window.Capacitor = {
+        Plugins: {
+          Haptica: {
+            tocar: ({ tipo }) => {
+              window.hapticas.push(tipo);
+              return Promise.resolve();
+            },
+          },
+        },
+      };
+    });
+  const salvo = JSON.stringify({
+    versao: 5,
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          { id: 'i1', tipo: 'item', texto: 'Levantar' },
+          { id: 'i2', tipo: 'item', texto: 'Beber água' },
+        ],
+      },
+    ],
+    habitos: [{ id: 'h', nome: 'Leitura', cor: 'azul', tipo: 'simnao' }],
+  });
+  const { pagina, erros } = await abrir(t, { salvo, preparar: comMotor });
+  const hapticas = () => pagina.evaluate(() => window.hapticas.splice(0));
+
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await visivel(pagina.getByText('1 de 2 hoje'));
+  assert.deepEqual(await hapticas(), ['marcar']);
+
+  // O último item fecha a rotina do dia: efeito de concluir.
+  await pagina.getByRole('checkbox', { name: /Beber água/ }).click();
+  await visivel(pagina.getByText('2 de 2 hoje'));
+  assert.deepEqual(await hapticas(), ['concluido']);
+
+  // Desmarcar tem efeito próprio.
+  await pagina.locator('.area-marcados .rotina-item', { hasText: 'Beber água' }).click();
+  await visivel(pagina.getByText('1 de 2 hoje'));
+  assert.deepEqual(await hapticas(), ['desmarcar']);
+
+  // Hábito: cumprir dá o efeito de concluir; pular, o de marcar. A espera é maior que o
+  // intervalo mínimo entre duas vibrações.
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Leitura, hoje: não feito').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  await pagina.waitForTimeout(120);
+  await botao(pagina, 'Leitura, hoje: feito').click();
+  await visivel(botao(pagina, 'Leitura, hoje: pulado'));
+  assert.deepEqual(await hapticas(), ['concluido', 'marcar']);
+
+  // Em rajada (menos de 80 ms entre uma chamada e outra), só a primeira vibra.
+  await pagina.waitForTimeout(120);
+  const emRajada = await pagina.evaluate(async () => {
+    const { vibrar } = await import('./js/ui.js');
+    vibrar('marcar');
+    vibrar('desmarcar');
+    vibrar('concluido');
+    return window.hapticas.splice(0);
+  });
+  assert.deepEqual(emRajada, ['marcar']);
+  assert.deepEqual(erros, []);
+});
+
 test('rotina ligada a hábito: marcar o item marca o hábito; desfazer e desmarcar tudo desfazem', async (t) => {
   const habito = (id, nome, extra) => ({
     id,

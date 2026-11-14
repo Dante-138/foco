@@ -105,7 +105,8 @@ function gravar(habito, dia, valor) {
   // Resposta ao toque: a marca nova dá um pulo; cumprir o hábito ganha destaque e vibração própria.
   const concluiu = cumprido(habito, valor);
   recemMarcada = { habitoId: habito.id, dia, concluiu };
-  vibrar(concluiu ? 'concluido' : 'toque');
+  if (concluiu) vibrar('concluido');
+  else vibrar(valor == null ? 'desmarcar' : 'marcar');
   redesenhar();
 }
 

@@ -633,6 +633,79 @@ ul {
   font-weight: 600;
 }
 
+/* Marcar um item da rotina: a caixa preenche com um pulo e o texto risca no lugar; um instante
+   depois a linha desliza para fora (rotinas.js) e o item chega na outra área. */
+.rotina-item .caixa {
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.rotina-item.marcando .caixa {
+  animation: marca-concluiu 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+/* O visto se desenha, do começo ao fim do traço (o traço mede 19,8 no desenho de 24). */
+.rotina-item.marcando.feito .caixa path {
+  stroke-dasharray: 21;
+  animation: desenhar-visto 0.28s ease-out 0.04s both;
+}
+
+@keyframes desenhar-visto {
+  from {
+    stroke-dashoffset: 21;
+  }
+}
+
+li.mudando-de-area {
+  overflow: hidden;
+  transition:
+    height 0.24s ease-in,
+    opacity 0.2s ease-in,
+    transform 0.24s ease-in;
+}
+
+li.mudando-de-area.saindo {
+  height: 0 !important; /* vence a altura fixada em linha pelo código */
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+.rotina-item.chegou {
+  animation: chegar 0.3s ease-out;
+}
+
+.concluidas-topo.pulsa {
+  animation: contador-pulso 0.45s ease-out;
+}
+
+@keyframes chegar {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes contador-pulso {
+  40% {
+    color: var(--acento);
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotina-item.marcando .caixa,
+  .rotina-item.marcando.feito .caixa path,
+  .rotina-item.chegou,
+  .concluidas-topo.pulsa {
+    animation: none;
+  }
+
+  li.mudando-de-area {
+    transition: none;
+  }
+}
+
 .rotina-item.feito .caixa {
   background: var(--acento);
   border-color: var(--acento);
