@@ -1,8 +1,12 @@
 // Portão das mensagens de commit. Sem dependências.
 //
-// Uso: node tools/verificar-commits.mjs <base>
-//   <base>  ponto de partida da comparação, por exemplo origin/main.
-//           Confere os commits de <base>..HEAD.
+// Uso: node tools/verificar-commits.mjs <base> [<ponta>]
+//   <base>   ponto de partida da comparação, por exemplo origin/main.
+//   <ponta>  até onde conferir (padrão: HEAD). O gancho de pre-push passa o commit
+//            que está sendo enviado, que pode não ser o do branch aberto.
+//   Confere os commits de <base>..<ponta>.
+//
+// Roda em três lugares: no "npm run check", no gancho .githooks/pre-push e no CI.
 //
 // Variável de ambiente opcional TITULO_PR: título do pull request, conferido
 // pela mesma regra (com squash merge, é ele que vira o commit na main).
@@ -42,10 +46,11 @@ export function problemasDaMensagem(mensagem) {
   return problemas;
 }
 
-function commitsDesde(base) {
+function commitsDesde(base, ponta) {
   // %x00 separa os commits; %x01 separa o hash da mensagem.
-  const saida = execFileSync('git', ['log', '--no-merges', '--format=%h%x01%B%x00', `${base}..HEAD`], {
+  const saida = execFileSync('git', ['log', '--no-merges', '--format=%h%x01%B%x00', `${base}..${ponta}`], {
     encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'], // o erro do git vira a mensagem de principal()
   });
   return saida
     .split('\0')
@@ -58,13 +63,23 @@ function commitsDesde(base) {
 }
 
 function principal() {
-  const base = process.argv[2];
+  const [base, ponta = 'HEAD'] = process.argv.slice(2);
   if (!base) {
-    console.error('Uso: node tools/verificar-commits.mjs <base>   (exemplo: origin/main)');
+    console.error('Uso: node tools/verificar-commits.mjs <base> [<ponta>]   (exemplo: origin/main)');
     return 2;
   }
 
-  const itens = commitsDesde(base).map(({ hash, mensagem }) => ({
+  let commits;
+  try {
+    commits = commitsDesde(base, ponta);
+  } catch {
+    console.error(
+      `Não consegui ler os commits de ${base}..${ponta}. A referência existe? Tente "git fetch origin".`,
+    );
+    return 2;
+  }
+
+  const itens = commits.map(({ hash, mensagem }) => ({
     rotulo: `${hash} ${mensagem.split('\n')[0]}`,
     problemas: problemasDaMensagem(mensagem),
   }));
