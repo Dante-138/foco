@@ -15,7 +15,8 @@ rotinas do dia, hábitos e tarefas com prazo.
   mostra as sequências. Um filtro esconde os já resolvidos no dia e os arquivados.
 - **Tarefas**: listas com prazo e horário, agrupadas em Atrasadas, Hoje, Amanhã, datas e Sem data,
   ou em outra ordem (estrela, título, mais recentes). Uma tarefa pode se repetir a cada N dias,
-  semanas, meses ou anos.
+  semanas, meses ou anos. Segurar o nome de uma lista abre o menu dela, com renomear, mover na
+  faixa e excluir.
 - **Lembretes**: no app Android, a tarefa com prazo avisa por notificação, na hora marcada ou
   às 9h quando só tem a data.
 - **Painel**: o dia numa tela só, com o anel da rotina aberta, os próximos itens, os hábitos e as
