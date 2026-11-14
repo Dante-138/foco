@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "tap",
+  "tap": {
+    "testFiles": ["tests/unidade/**/*.test.js"]
+  },
+  "mutate": ["www/js/nucleo/**/*.js"],
+  "coverageAnalysis": "perTest",
+  "ignorePatterns": ["android", "docker", "referencias", "saida", "tests/e2e"],
+  "reporters": ["clear-text", "progress"],
+  "clearTextReporter": {
+    "logTests": false,
+    "reportTests": false
+  },
+  "thresholds": {
+    "high": 95,
+    "low": 90,
+    "break": 90
+  },
+  "tempDirName": ".stryker-tmp",
+  "concurrency": 4
+}

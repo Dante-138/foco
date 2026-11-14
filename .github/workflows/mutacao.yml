@@ -1,0 +1,38 @@
+name: Mutação
+
+# Teste de mutação do núcleo (Stryker): troca pedaços do código, um de cada vez, e confere se
+# algum teste percebe. Cobertura de 100% diz que a linha rodou; a mutação diz se o teste notaria
+# o erro. Leva uns 3 minutos, por isso fica fora do "npm run check" e roda em paralelo no CI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutacao-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stryker:
+    name: Mutação
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      # Reprova se a pontuação cair abaixo do limiar de stryker.config.json.
+      - name: Teste de mutação do núcleo
+        run: npm run test:mutation
