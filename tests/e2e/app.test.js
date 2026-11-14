@@ -1297,6 +1297,44 @@ test('tarefas: mover a lista para os lados muda a ordem na faixa do topo', async
   assert.deepEqual(erros, []);
 });
 
+test('tarefas: segurar o nome de uma lista abre o menu dela, sem trocar de lista', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'tarefas',
+    listas: [
+      { id: 'a', nome: 'Trabalho' },
+      { id: 'b', nome: 'Faculdade' },
+      { id: 'c', nome: 'Contas' },
+    ],
+    listaAtiva: 'a',
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const ordem = async () => (await pagina.locator('.faixa .chip').allTextContents()).slice(1, -1);
+  const chip = (nome) => pagina.locator('.faixa .chip', { hasText: nome });
+  const menuFechado = () => pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+
+  // Segurar "Contas", que não é a lista aberta: o menu é o dela.
+  await chip('Contas').click({ delay: 800 });
+  await visivel(pagina.getByRole('heading', { name: 'Contas' }));
+  await botao(pagina, 'Mover para a esquerda').click();
+  await menuFechado();
+  assert.deepEqual(await ordem(), ['Trabalho', 'Contas', 'Faculdade']);
+
+  // A lista aberta continua a mesma: segurar não é abrir.
+  await visivel(pagina.getByRole('heading', { name: 'Trabalho' }));
+  assert.equal(await chip('Trabalho').getAttribute('class'), 'chip ativo');
+
+  // O toque curto continua só abrindo a lista, sem menu.
+  await chip('Faculdade').click();
+  await visivel(pagina.getByRole('heading', { name: 'Faculdade' }));
+  assert.equal(await pagina.locator('dialog').count(), 0);
+  assert.deepEqual(
+    JSON.parse(await lerSalvo(pagina, CHAVE)).listas.map((l) => l.nome),
+    ['Trabalho', 'Contas', 'Faculdade'],
+  );
+  assert.deepEqual(erros, []);
+});
+
 test('tarefas: excluir concluídas apaga só as concluídas da lista, depois de confirmar', async (t) => {
   const tarefa = (id, listaId, titulo, feita) => ({
     id,
