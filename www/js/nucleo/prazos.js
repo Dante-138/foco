@@ -11,12 +11,38 @@ export function rotuloData(iso, dia) {
   return data.getFullYear() === deIso(dia).getFullYear() ? fmtCurta.format(data) : fmtComAno.format(data);
 }
 
+// No mesmo dia: as com horário primeiro, na ordem do relógio; depois as sem horário.
+function porHora(a, b) {
+  if (a.hora && b.hora) return a.hora.localeCompare(b.hora);
+  if (a.hora) return -1;
+  if (b.hora) return 1;
+  return 0;
+}
+
 // Ordem: com prazo primeiro (mais próximo no topo), depois as sem data.
 export function porPrazo(a, b) {
-  if (a.prazo && b.prazo) return a.prazo.localeCompare(b.prazo) || a.criadaEm - b.criadaEm;
+  if (a.prazo && b.prazo) return a.prazo.localeCompare(b.prazo) || porHora(a, b) || a.criadaEm - b.criadaEm;
   if (a.prazo) return -1;
   if (b.prazo) return 1;
   return a.criadaEm - b.criadaEm;
+}
+
+const alfabetica = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+
+// Lista única, sem grupos, para as ordens que não são por data (ver ORDENS_TAREFAS
+// em esquema.js). Qualquer outro valor cai na ordem por prazo.
+//   estrela: as com estrela primeiro; dentro de cada parte, por prazo
+//   titulo:  alfabética, sem diferenciar maiúsculas nem acentos
+//   criacao: as mais novas primeiro
+export function ordenar(pendentes, ordem) {
+  const copia = [...pendentes];
+  if (ordem === 'estrela')
+    return copia.sort((a, b) => Number(b.estrela) - Number(a.estrela) || porPrazo(a, b));
+  if (ordem === 'titulo') {
+    return copia.sort((a, b) => alfabetica.compare(a.titulo, b.titulo) || a.criadaEm - b.criadaEm);
+  }
+  if (ordem === 'criacao') return copia.sort((a, b) => b.criadaEm - a.criadaEm);
+  return copia.sort(porPrazo);
 }
 
 // Devolve os grupos na ordem de exibição: Atrasadas, Hoje, Amanhã, cada data

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agrupar, porPrazo, rotuloData } from '../../www/js/nucleo/prazos.js';
+import { agrupar, ordenar, porPrazo, rotuloData } from '../../www/js/nucleo/prazos.js';
 
 const HOJE = '2026-11-12';
 
@@ -74,6 +74,44 @@ test('porPrazo coloca tarefa com prazo antes de tarefa sem data', () => {
   assert.ok(porPrazo(semPrazo, comPrazo) > 0);
 });
 
+test('porPrazo, no mesmo dia: com horário antes, na ordem do relógio; sem horário depois', () => {
+  const dia = '2026-11-20';
+  const lista = [
+    { titulo: 'sem horário, mais antiga', prazo: dia, hora: null, criadaEm: 1 },
+    { titulo: 'tarde', prazo: dia, hora: '14:30', criadaEm: 2 },
+    { titulo: 'manhã', prazo: dia, hora: '07:15', criadaEm: 3 },
+    { titulo: 'sem horário, mais nova', prazo: dia, hora: null, criadaEm: 4 },
+    { titulo: 'tarde, criada depois', prazo: dia, hora: '14:30', criadaEm: 5 },
+    { titulo: 'véspera à noite', prazo: '2026-11-19', hora: '23:00', criadaEm: 6 },
+  ];
+  assert.deepEqual(
+    [...lista].sort(porPrazo).map((t) => t.titulo),
+    [
+      'véspera à noite',
+      'manhã',
+      'tarde',
+      'tarde, criada depois',
+      'sem horário, mais antiga',
+      'sem horário, mais nova',
+    ],
+  );
+  // a ordem não depende da posição de partida
+  assert.deepEqual(
+    [...lista]
+      .reverse()
+      .sort(porPrazo)
+      .map((t) => t.titulo),
+    [
+      'véspera à noite',
+      'manhã',
+      'tarde',
+      'tarde, criada depois',
+      'sem horário, mais antiga',
+      'sem horário, mais nova',
+    ],
+  );
+});
+
 test('rotuloData mostra dia da semana no ano corrente e o ano quando é outro', () => {
   assert.match(rotuloData('2026-11-13', HOJE), /sex.*13 de nov/);
   assert.doesNotMatch(rotuloData('2026-11-13', HOJE), /2026/);
@@ -83,4 +121,62 @@ test('rotuloData mostra dia da semana no ano corrente e o ano quando é outro', 
 test('virada do ano: 1º de janeiro é "Amanhã" em 31 de dezembro', () => {
   const grupos = agrupar([tarefa('ano novo', '2027-01-01')], '2026-12-31');
   assert.equal(grupos[0].chave, 'amanha');
+});
+
+// ------------------------------------------------------------- ordenar
+
+const titulos = (lista) => lista.map((t) => t.titulo);
+
+test('ordenar por estrela: as com estrela primeiro; dentro de cada parte, por prazo', () => {
+  const lista = [
+    { titulo: 'sem estrela, dia 20', prazo: '2026-11-20', estrela: false, criadaEm: 1 },
+    { titulo: 'com estrela, sem data', prazo: null, estrela: true, criadaEm: 2 },
+    { titulo: 'com estrela, dia 30', prazo: '2026-11-30', estrela: true, criadaEm: 3 },
+    { titulo: 'sem estrela, dia 13', prazo: '2026-11-13', estrela: false, criadaEm: 4 },
+  ];
+  assert.deepEqual(titulos(ordenar(lista, 'estrela')), [
+    'com estrela, dia 30',
+    'com estrela, sem data',
+    'sem estrela, dia 13',
+    'sem estrela, dia 20',
+  ]);
+});
+
+test('ordenar por título: alfabética, sem diferenciar maiúsculas nem acentos; empate pela criação', () => {
+  const lista = [
+    { titulo: 'zebra', criadaEm: 1 },
+    { titulo: 'Água', criadaEm: 2 },
+    { titulo: 'abacaxi', criadaEm: 3 },
+    { titulo: 'Tarefa 10', criadaEm: 4 },
+    { titulo: 'Tarefa 2', criadaEm: 5 },
+    { titulo: 'agua', criadaEm: 6 },
+  ];
+  assert.deepEqual(titulos(ordenar(lista, 'titulo')), [
+    'abacaxi',
+    'Água',
+    'agua',
+    'Tarefa 2',
+    'Tarefa 10',
+    'zebra',
+  ]);
+});
+
+test('ordenar por criação: as mais novas primeiro', () => {
+  const lista = [
+    { titulo: 'velha', criadaEm: 10 },
+    { titulo: 'nova', criadaEm: 30 },
+    { titulo: 'do meio', criadaEm: 20 },
+  ];
+  assert.deepEqual(titulos(ordenar(lista, 'criacao')), ['nova', 'do meio', 'velha']);
+});
+
+test('ordenar com ordem desconhecida usa o prazo, e nunca altera a lista recebida', () => {
+  const lista = [
+    { titulo: 'sem data', prazo: null, criadaEm: 1 },
+    { titulo: 'dia 20', prazo: '2026-11-20', criadaEm: 2 },
+  ];
+  const copia = structuredClone(lista);
+  assert.deepEqual(titulos(ordenar(lista, 'data')), ['dia 20', 'sem data']);
+  assert.deepEqual(titulos(ordenar(lista, 'qualquer coisa')), ['dia 20', 'sem data']);
+  assert.deepEqual(lista, copia);
 });

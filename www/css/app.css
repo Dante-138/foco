@@ -119,6 +119,7 @@ body {
     sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  overflow: hidden; /* quem rola é #conteudo; a animação de troca de aba não cria rolagem lateral */
 }
 
 button {
@@ -185,6 +186,40 @@ ul {
   min-height: 0;
   overflow-y: auto;
   padding-bottom: 96px; /* a última linha rola para cima do botão + */
+  /* O navegador cuida só da rolagem vertical; o movimento para o lado fica para o
+     código, que troca de aba (js/app.js). Sem isto, o Chrome trata o dedo indo para
+     a direita como "voltar página". */
+  touch-action: pan-y;
+}
+
+/* Troca de aba: o conteúdo novo entra do lado para onde a pessoa foi. */
+#conteudo.entra-da-direita {
+  animation: entrar-da-direita 0.16s ease-out;
+}
+
+#conteudo.entra-da-esquerda {
+  animation: entrar-da-esquerda 0.16s ease-out;
+}
+
+@keyframes entrar-da-direita {
+  from {
+    transform: translateX(28px);
+    opacity: 0;
+  }
+}
+
+@keyframes entrar-da-esquerda {
+  from {
+    transform: translateX(-28px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #conteudo.entra-da-direita,
+  #conteudo.entra-da-esquerda {
+    animation: none;
+  }
 }
 
 .abas {
@@ -243,6 +278,18 @@ ul {
   filter: brightness(1.2);
 }
 
+/* Segundo botão flutuante, menor, acima do "+": a ação rápida da aba (nas rotinas, desfazer). */
+.fab.secundario {
+  right: max(22px, calc((100vw - var(--largura-max)) / 2 + 22px));
+  bottom: calc(var(--abas-h) + 16px + var(--base-segura) + 68px);
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  background: var(--sup-2);
+  color: var(--texto);
+}
+
 /* ---------------------------------------------------------------- comuns */
 
 .faixa {
@@ -255,6 +302,7 @@ ul {
   padding: 4px 12px 10px;
   background: var(--fundo);
   scrollbar-width: none;
+  touch-action: pan-x pan-y; /* a faixa rola para os lados; o resto do conteúdo, não */
 }
 
 .faixa::-webkit-scrollbar {
@@ -338,6 +386,11 @@ ul {
   color: var(--texto-2);
 }
 
+/* Com conteúdo logo abaixo (a seção de concluídas), a mensagem não vai para o meio da tela. */
+.sem-conteudo.compacto {
+  padding: 40px 32px 32px;
+}
+
 .sem-conteudo-titulo {
   margin-bottom: 6px;
   font-size: 17px;
@@ -378,12 +431,46 @@ ul {
 }
 
 .rotina-secao {
-  padding: 16px 16px 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 2px 14px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--acento);
+}
+
+/* Caixa do título: marca ou desmarca a seção inteira. Fica alinhada com as caixas dos itens. */
+.secao-caixa {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 36px;
+}
+
+.secao-caixa .caixa {
+  width: 18px;
+  height: 18px;
+  border-color: var(--acento);
+  border-radius: 5px;
+}
+
+.secao-caixa.feito .caixa {
+  background: var(--acento);
+  color: var(--sobre-acento-forte);
+}
+
+.secao-nome {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rotina-secao.marcada .secao-nome {
+  color: var(--texto-3);
 }
 
 .rotina-item {
@@ -423,6 +510,37 @@ ul {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Item ligado a um hábito: um elo pequeno, na cor do hábito, no fim da linha. */
+.elo {
+  flex: none;
+  line-height: 0;
+  color: var(--cor);
+  opacity: 0.8;
+}
+
+/* Folha "Ligar itens a hábitos": texto do item à esquerda, seletor de hábito à direita. */
+.ligacoes {
+  display: grid;
+  gap: 8px;
+}
+
+.ligacao {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.ligacao > span {
+  overflow-wrap: anywhere;
+}
+
+.ligacao .entrada {
+  padding: 8px 10px;
+  font-size: 14px;
 }
 
 .rotina-item.feito .caixa {
@@ -496,7 +614,7 @@ ul {
   color: var(--cor);
 }
 
-.habito-nome > span:last-child {
+.habito-nome > span:nth-of-type(2) {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -506,12 +624,128 @@ ul {
   line-height: 0;
 }
 
+/* Botão de filtro, no canto do cabeçalho da grade. Fica na cor de destaque quando esconde algo. */
+.filtro {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px 0 4px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--texto-2);
+}
+
+.filtro:active {
+  background: var(--toque);
+}
+
+.filtro.ativo {
+  color: var(--acento);
+}
+
+/* Hábito arquivado, quando o filtro deixa ver: apagado e com uma etiqueta. */
+.habito.arquivado .habito-nome,
+.habito.arquivado .cel {
+  opacity: 0.45;
+}
+
+.etiqueta {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .cel {
+  position: relative;
   display: grid;
   place-items: center;
   align-content: center;
   height: 44px;
   color: var(--cor);
+}
+
+/* Resposta ao toque. Qualquer marca nova dá um pulo curto; cumprir o hábito ganha um
+   pulo maior, uma onda na cor do hábito e um pulso no anel de progresso da linha. */
+.cel.marcou > * {
+  animation: marca-pulo 0.16s ease-out;
+}
+
+.cel.concluiu > * {
+  animation: marca-concluiu 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.cel.concluiu::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 2px solid var(--cor);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  animation: marca-onda 0.5s ease-out;
+}
+
+.anel.pulsa {
+  animation: anel-pulso 0.5s ease-out;
+}
+
+@keyframes marca-pulo {
+  from {
+    transform: scale(0.6);
+  }
+}
+
+@keyframes marca-concluiu {
+  0% {
+    transform: scale(0.3);
+  }
+
+  55% {
+    transform: scale(1.4);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes marca-onda {
+  from {
+    transform: scale(0.35);
+    opacity: 0.75;
+  }
+
+  to {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes anel-pulso {
+  45% {
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cel.marcou > *,
+  .cel.concluiu > *,
+  .cel.concluiu::after,
+  .anel.pulsa {
+    animation: none;
+  }
 }
 
 .cel:active {
@@ -552,6 +786,21 @@ ul {
 
 .grupo.atrasado .grupo-titulo {
   color: var(--perigo);
+}
+
+/* Grupos por data: um respiro maior entre um dia e outro. O de hoje ganha o título
+   na cor de destaque e um pouco mais de espaço em volta, como no Google Tasks. */
+.cartao.grupo {
+  margin-bottom: 14px;
+}
+
+.grupo.hoje {
+  margin-top: 18px;
+  margin-bottom: 22px;
+}
+
+.grupo.hoje .grupo-titulo {
+  color: var(--acento);
 }
 
 .tarefa {
@@ -621,9 +870,38 @@ ul {
   color: var(--estrela);
 }
 
-.tarefa.feita .tarefa-titulo {
+.tarefa.feita .tarefa-titulo,
+.tarefa.concluindo .tarefa-titulo {
   color: var(--texto-2);
   text-decoration: line-through;
+}
+
+/* Concluir uma tarefa: o círculo vira a marca, o título é riscado e a linha se recolhe.
+   A altura de partida é fixada pelo código (tarefas.js) para a transição ter de onde sair. */
+.tarefa.concluindo {
+  overflow: hidden;
+  transition:
+    height 0.22s ease-in,
+    opacity 0.2s ease-in;
+}
+
+.tarefa.concluindo .tarefa-check .icone {
+  animation: marca-concluiu 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.tarefa.saindo {
+  height: 0 !important; /* vence a altura fixada em linha pelo código */
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tarefa.concluindo {
+    transition: none;
+  }
+
+  .tarefa.concluindo .tarefa-check .icone {
+    animation: none;
+  }
 }
 
 .concluidas-topo {
@@ -815,10 +1093,20 @@ textarea.editor {
 }
 
 .menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 48px;
   padding: 0 4px;
   text-align: left;
   font-size: 16px;
+}
+
+/* Marca da opção ligada ou escolhida. */
+.menu-item .icone {
+  flex: none;
+  color: var(--acento);
 }
 
 .menu-item.perigo {

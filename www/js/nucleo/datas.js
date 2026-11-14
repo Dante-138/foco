@@ -11,6 +11,12 @@ export function isoLocal(data = new Date()) {
 
 export const hoje = () => isoLocal();
 
+// Momento atual no fuso local, "AAAA-MM-DDTHH:MM". Nesse formato a ordem alfabética é a do relógio.
+export function agoraLocal(data = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${isoLocal(data)}T${p(data.getHours())}:${p(data.getMinutes())}`;
+}
+
 export function deIso(iso) {
   const [ano, mes, dia] = iso.split('-').map(Number);
   return new Date(ano, mes - 1, dia);
@@ -20,6 +26,12 @@ export function somaDias(iso, n) {
   const data = deIso(iso);
   data.setDate(data.getDate() + n);
   return isoLocal(data);
+}
+
+// Dias corridos de "de" até "ate" (negativo se "ate" vem antes). O arredondamento
+// absorve a hora a mais ou a menos dos dias de mudança de horário de verão.
+export function diasEntre(de, ate) {
+  return Math.round((deIso(ate) - deIso(de)) / 86_400_000);
 }
 
 // Aceita só datas reais no formato AAAA-MM-DD: "2026-02-30" e "2026-1-5" são recusadas.

@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dataValida, deIso, hoje, horaValida, isoLocal, somaDias } from '../../www/js/nucleo/datas.js';
+import {
+  agoraLocal,
+  diasEntre,
+  dataValida,
+  deIso,
+  hoje,
+  horaValida,
+  isoLocal,
+  somaDias,
+} from '../../www/js/nucleo/datas.js';
 
 test('isoLocal formata com zeros à esquerda', () => {
   assert.equal(isoLocal(new Date(2026, 0, 5)), '2026-01-05');
@@ -59,4 +68,19 @@ test('horaValida aceita só 00:00 a 23:59 com dois dígitos', () => {
   for (const ruim of ['24:00', '7:00', '12:60', '12:5', '1230', '12:30:00', '', null, undefined, 1230]) {
     assert.equal(horaValida(ruim), false, String(ruim));
   }
+});
+
+test('diasEntre conta dias corridos, atravessa mês e ano, e fica negativo para trás', () => {
+  assert.equal(diasEntre('2026-11-12', '2026-11-12'), 0);
+  assert.equal(diasEntre('2026-11-12', '2026-11-13'), 1);
+  assert.equal(diasEntre('2026-11-13', '2026-11-12'), -1);
+  assert.equal(diasEntre('2026-12-31', '2027-01-01'), 1);
+  assert.equal(diasEntre('2024-02-28', '2024-03-01'), 2);
+  assert.equal(diasEntre('2026-01-01', '2027-01-01'), 365);
+});
+
+test('agoraLocal dá o momento no fuso local, com zeros à esquerda', () => {
+  assert.equal(agoraLocal(new Date(2026, 10, 12, 9, 5)), '2026-11-12T09:05');
+  assert.equal(agoraLocal(new Date(2026, 0, 1, 0, 0)), '2026-01-01T00:00');
+  assert.match(agoraLocal(), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
 });

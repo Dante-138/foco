@@ -3,20 +3,198 @@
 
 import { estado, salvar, marcasDeHoje } from './store.js';
 import { uid } from './nucleo/ids.js';
+import { hoje } from './nucleo/datas.js';
+import { registroAposItem, sugerirHabito } from './nucleo/ligacao.js';
 import { LIMITES } from './nucleo/esquema.js';
 import { textoParaItens, itensParaTexto } from './nucleo/rotina-texto.js';
-import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
+import { desmarcarBloco, emAreas, marcarBloco, semAsUltimas } from './nucleo/rotina-ordem.js';
+import {
+  h,
+  icone,
+  abrirFolha,
+  abrirMenu,
+  avisar,
+  confirmar,
+  campo,
+  estadoVazio,
+  redesenhar,
+  vibrar,
+} from './ui.js';
 
 // ---------------------------------------------------------------- ações
+
+// Quantos outros itens ligados ao mesmo hábito estão marcados hoje, em qualquer rotina.
+function outrosMarcadosDoHabito(item) {
+  const marcas = marcasDeHoje();
+  let quantos = 0;
+  for (const rotina of estado.rotinas) {
+    const marcadas = new Set(marcas[rotina.id] ?? []);
+    for (const outro of rotina.itens) {
+      if (outro.id !== item.id && outro.habitoId === item.habitoId && marcadas.has(outro.id)) quantos += 1;
+    }
+  }
+  return quantos;
+}
+
+// Item ligado a um hábito: marcar ou desmarcar o item acerta o registro de hoje do hábito.
+// Chamar depois de atualizar as marcas do dia.
+function acertarHabitoLigado(item, marcou) {
+  const habito = item.habitoId ? estado.habitos.find((x) => x.id === item.habitoId) : null;
+  if (!habito) return;
+  const dia = hoje();
+  const registro = (estado.registros[habito.id] ??= {});
+  const novo = registroAposItem(habito, registro[dia], marcou, outrosMarcadosDoHabito(item));
+  if (novo === null) delete registro[dia];
+  else registro[dia] = novo;
+  if (!Object.keys(registro).length) delete estado.registros[habito.id];
+}
+
+// Desfazer por lotes: marcar um item é um lote de 1; marcar a seção inteira é um lote do
+// tamanho dela. Os lotes valem enquanto o app está aberto; sem eles (app reaberto, ou
+// depois de desmarcar algo à mão), o desfazer volta uma marca por vez.
+const lotes = new Map(); // id da rotina -> tamanhos dos lotes, do mais antigo ao mais novo
+const anotarLote = (rotina, tamanho) => lotes.set(rotina.id, [...(lotes.get(rotina.id) ?? []), tamanho]);
+
+// A área de marcados pode ser recolhida; começa aberta.
+let marcadosAbertos = true;
 
 function alternarItem(rotina, item) {
   const marcas = marcasDeHoje();
   const atuais = new Set(marcas[rotina.id] ?? []);
-  if (atuais.has(item.id)) atuais.delete(item.id);
-  else atuais.add(item.id);
-  marcas[rotina.id] = [...atuais];
+  const marcou = !atuais.has(item.id);
+  if (marcou) atuais.add(item.id);
+  else atuais.delete(item.id);
+  if (marcou) anotarLote(rotina, 1);
+  else lotes.delete(rotina.id);
+  marcas[rotina.id] = [...atuais]; // a ordem da lista é a ordem em que os itens foram marcados
+  acertarHabitoLigado(item, marcou);
+  vibrar('toque');
   salvar();
   redesenhar();
+}
+
+// Desfazer: volta a última marca, ou a seção inteira quando ela foi marcada de uma vez.
+// Tocar de novo volta mais uma, e assim por diante.
+function desfazerUltimaMarca(rotina) {
+  const marcas = marcasDeHoje();
+  const atuais = marcas[rotina.id] ?? [];
+  const quantas = Math.min(lotes.get(rotina.id)?.pop() ?? 1, atuais.length);
+  const desfeitas = atuais.slice(atuais.length - quantas).reverse();
+  marcas[rotina.id] = semAsUltimas(atuais, quantas);
+  for (const id of desfeitas) {
+    const item = rotina.itens.find((i) => i.id === id);
+    if (item) acertarHabitoLigado(item, false);
+  }
+  vibrar('toque');
+  salvar();
+  redesenhar();
+}
+
+// Caixa do título da seção: marca de uma vez os itens do bloco, ou desmarca todos.
+// "bloco" traz os itens que a ação alcança: os que faltam, ao marcar; os marcados, ao desmarcar.
+function alternarSecao(rotina, bloco, marcar) {
+  const marcas = marcasDeHoje();
+  const atuais = marcas[rotina.id] ?? [];
+  const antes = new Set(atuais);
+  const mudam = bloco.itens.filter((item) => antes.has(item.id) !== marcar);
+  marcas[rotina.id] = marcar ? marcarBloco(atuais, bloco) : desmarcarBloco(atuais, bloco);
+  for (const item of mudam) acertarHabitoLigado(item, marcar);
+  if (marcar && mudam.length) anotarLote(rotina, mudam.length);
+  if (!marcar) lotes.delete(rotina.id);
+  vibrar(marcar ? 'concluido' : 'toque');
+  salvar();
+  redesenhar();
+}
+
+function desmarcarTudo(rotina) {
+  const marcas = marcasDeHoje();
+  const marcadas = new Set(marcas[rotina.id] ?? []);
+  delete marcas[rotina.id];
+  lotes.delete(rotina.id);
+  for (const item of rotina.itens) if (marcadas.has(item.id)) acertarHabitoLigado(item, false);
+  salvar();
+  redesenhar();
+}
+
+// Folha "Ligar itens a hábitos": um seletor de hábito para cada item da rotina.
+function abrirLigacoes(rotina) {
+  const itens = rotina.itens.filter((i) => i.tipo === 'item');
+  // Hábitos arquivados só aparecem se já estiverem ligados a algum item desta rotina.
+  const emUso = new Set(itens.map((i) => i.habitoId));
+  const habitos = estado.habitos.filter((x) => !x.arquivado || emUso.has(x.id));
+  if (!habitos.length || !itens.length) {
+    avisar(habitos.length ? 'Esta rotina não tem itens.' : 'Crie um hábito na aba Hábitos para poder ligar.');
+    return;
+  }
+
+  const seletores = new Map();
+  const linhas = itens.map((item) => {
+    const seletor = h(
+      'select',
+      { class: 'entrada', 'aria-label': `Hábito de ${item.texto}` },
+      h('option', { value: '' }, 'Sem hábito'),
+      habitos.map((x) => h('option', { value: x.id }, x.nome)),
+    );
+    seletor.value = habitos.some((x) => x.id === item.habitoId) ? item.habitoId : '';
+    seletores.set(item.id, seletor);
+    return h(
+      'div',
+      { class: 'ligacao' },
+      h('span', {}, item.hora ? `${item.hora} ${item.texto}` : item.texto),
+      seletor,
+    );
+  });
+
+  const sugerir = () => {
+    let novas = 0;
+    for (const item of itens) {
+      const seletor = seletores.get(item.id);
+      const sugestao = seletor.value ? null : sugerirHabito(item.texto, habitos);
+      if (sugestao) {
+        seletor.value = sugestao;
+        novas += 1;
+      }
+    }
+    avisar(
+      novas
+        ? `${novas} ${novas === 1 ? 'sugestão' : 'sugestões'}. Confira e salve.`
+        : 'Nenhum nome parecido.',
+    );
+  };
+
+  const aoSalvar = (e) => {
+    e.preventDefault();
+    for (const item of itens) item.habitoId = seletores.get(item.id).value || null;
+    salvar();
+    fechar();
+    redesenhar();
+  };
+
+  const fechar = abrirFolha({
+    titulo: 'Ligar itens a hábitos',
+    fecharNoFundo: false,
+    corpo: h(
+      'form',
+      { class: 'folha-form', onsubmit: aoSalvar },
+      h(
+        'p',
+        { class: 'dica' },
+        'Marcar um item ligado marca o hábito no dia; desmarcar desfaz. Em hábito numérico, cada item marcado soma 1.',
+      ),
+      h(
+        'div',
+        { class: 'linha-botoes inicio' },
+        h('button', { type: 'button', class: 'botao contorno', onclick: sugerir }, 'Sugerir pelo nome'),
+      ),
+      h('div', { class: 'ligacoes' }, linhas),
+      h(
+        'div',
+        { class: 'linha-botoes' },
+        h('button', { type: 'button', class: 'botao', onclick: () => fechar() }, 'Cancelar'),
+        h('button', { type: 'submit', class: 'botao cheio' }, 'Salvar'),
+      ),
+    ),
+  });
 }
 
 function editarRotina(rotina) {
@@ -113,24 +291,63 @@ function menuRotina(rotina) {
   abrirMenu(rotina.nome, [
     { rotulo: 'Editar rotina', acao: () => editarRotina(rotina) },
     {
-      rotulo: 'Desmarcar tudo',
+      rotulo: 'Marcados no fim',
+      marcado: estado.marcadosNoFim,
       acao: () => {
-        delete marcasDeHoje()[rotina.id];
+        estado.marcadosNoFim = !estado.marcadosNoFim;
         salvar();
         redesenhar();
       },
     },
+    { rotulo: 'Ligar itens a hábitos', acao: () => abrirLigacoes(rotina) },
+    { rotulo: 'Desmarcar tudo', acao: () => desmarcarTudo(rotina) },
     { rotulo: 'Excluir rotina', perigo: true, acao: () => excluirRotina(rotina) },
   ]);
 }
 
 // --------------------------------------------------------------- desenho
 
+// Marca visual do item ligado a um hábito: um elo na cor do hábito.
+function eloDoHabito(item) {
+  const habito = item.habitoId ? estado.habitos.find((x) => x.id === item.habitoId) : null;
+  if (!habito) return null;
+  return h(
+    'span',
+    {
+      class: 'elo',
+      style: { '--cor': `var(--cor-${habito.cor})` },
+      title: `Ligado ao hábito ${habito.nome}`,
+    },
+    icone('elo', { tam: 16 }),
+  );
+}
+
+// Título de seção, com a caixa que marca ou desmarca o bloco inteiro.
+function tituloDaSecao(rotina, bloco, marcadas) {
+  const marcada = bloco.itens.length > 0 && bloco.itens.every((item) => marcadas.has(item.id));
+  return h(
+    'li',
+    { class: `rotina-secao${marcada ? ' marcada' : ''}` },
+    h(
+      'button',
+      {
+        type: 'button',
+        class: `secao-caixa${marcada ? ' feito' : ''}`,
+        role: 'checkbox',
+        'aria-checked': String(marcada),
+        'aria-label': `${marcada ? 'Desmarcar' : 'Marcar'} a seção ${bloco.secao.texto}`,
+        disabled: !bloco.itens.length,
+        onclick: () => alternarSecao(rotina, bloco, !marcada),
+      },
+      h('span', { class: 'caixa' }, icone('check', { tam: 14 })),
+    ),
+    h('span', { class: 'secao-nome' }, bloco.secao.texto),
+  );
+}
+
 // comHoras: a rotina tem algum item com horário. Nesse caso todo item reserva a
 // coluna do horário, para os textos ficarem alinhados uns com os outros.
 function linha(rotina, item, marcadas, comHoras) {
-  if (item.tipo === 'secao') return h('li', { class: 'rotina-secao' }, item.texto);
-
   const feito = marcadas.has(item.id);
   return h(
     'li',
@@ -147,8 +364,55 @@ function linha(rotina, item, marcadas, comHoras) {
       h('span', { class: 'caixa' }, icone('check', { tam: 16 })),
       comHoras ? h('span', { class: 'hora' }, item.hora ?? '') : null,
       h('span', { class: 'rotina-texto' }, item.texto),
+      eloDoHabito(item),
     ),
   );
+}
+
+// As duas áreas da rotina, como no Google Keep: o que falta em cima e, embaixo, a área
+// "Marcados", que pode ser recolhida. Devolve os elementos a pôr na tela.
+function areasDaRotina(rotina, marcadas, comHoras) {
+  const { pendentes, marcados } = emAreas(rotina.itens, marcadas, estado.marcadosNoFim);
+  const linhasDe = (blocos) =>
+    blocos.flatMap((bloco) => [
+      bloco.secao ? tituloDaSecao(rotina, bloco, marcadas) : null,
+      ...bloco.itens.map((item) => linha(rotina, item, marcadas, comHoras)),
+    ]);
+  const quantos = marcados.reduce((n, bloco) => n + bloco.itens.length, 0);
+
+  return [
+    pendentes.length
+      ? h('ul', { class: 'cartao area-pendentes' }, linhasDe(pendentes))
+      : estadoVazio('Rotina concluída', 'Tudo marcado por hoje.', { compacto: true }),
+    marcados.length
+      ? h(
+          'section',
+          { class: 'cartao area-marcados' },
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'concluidas-topo',
+              'aria-expanded': String(marcadosAbertos),
+              onclick: () => {
+                marcadosAbertos = !marcadosAbertos;
+                redesenhar();
+              },
+            },
+            `Marcados (${quantos})`,
+            icone(marcadosAbertos ? 'cima' : 'baixo'),
+          ),
+          marcadosAbertos ? h('ul', {}, linhasDe(marcados)) : null,
+        )
+      : null,
+  ].filter(Boolean); // a lista vai direto para a tela, sem passar por h(): não pode ter null
+}
+
+// Botão flutuante da aba: desfazer, sempre ao alcance enquanto houver marca hoje.
+function acaoFlutuante() {
+  const ativa = estado.rotinas.find((r) => r.id === estado.rotinaAtiva);
+  if (!ativa || !marcasDeHoje()[ativa.id]?.length) return null;
+  return { icone: 'desfazer', rotulo: 'Desfazer a última marca', acao: () => desfazerUltimaMarca(ativa) };
 }
 
 function render(raiz) {
@@ -215,13 +479,9 @@ function render(raiz) {
       { class: 'progresso' },
       h('div', { class: 'progresso-barra', style: { width: `${porcento}%` } }),
     ),
-    itens.length
-      ? h(
-          'ul',
-          { class: 'cartao' },
-          ativa.itens.map((item) => linha(ativa, item, marcadas, comHoras)),
-        )
-      : estadoVazio('Rotina vazia', 'Abra o menu e toque em Editar rotina.'),
+    ...(itens.length
+      ? areasDaRotina(ativa, marcadas, comHoras)
+      : [estadoVazio('Rotina vazia', 'Abra o menu e toque em Editar rotina.')]),
   );
   faixa.scrollLeft = rolagemFaixa;
 }
@@ -232,4 +492,5 @@ export const rotinas = {
   rotuloAdicionar: 'Nova rotina',
   render,
   aoAdicionar: () => editarRotina(null),
+  flutuante: acaoFlutuante,
 };

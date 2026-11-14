@@ -3,19 +3,24 @@
 import { CHAVE, estado, salvar, problemaDeCarga, correcoesNaCarga } from './store.js';
 import { hoje } from './nucleo/datas.js';
 import { PROBLEMA } from './nucleo/estado.js';
+import { passoDoDeslize, vizinha } from './nucleo/gesto.js';
 import { h, icone, avisar, estadoVazio } from './ui.js';
 import { rotinas } from './rotinas.js';
 import { habitos } from './habitos.js';
 import { tarefas } from './tarefas.js';
 import { aplicarTema } from './tema.js';
 import { abrirAjustes } from './ajustes.js';
+import { agendarSincronia } from './lembretes.js';
 
-// Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar().
+// Cada aba expõe: id, titulo, rotuloAdicionar, render(raiz), aoAdicionar() e, se quiser,
+// flutuante(): devolve { icone, rotulo, acao } para o botão flutuante menor, ou null.
 const ABAS = [rotinas, habitos, tarefas];
 
 const titulo = document.getElementById('titulo');
 const conteudo = document.getElementById('conteudo');
 const fab = document.getElementById('fab');
+const fabSecundario = document.getElementById('fab-secundario');
+let acaoSecundaria = null;
 const nav = document.getElementById('abas');
 const botaoAjustes = document.getElementById('ajustes');
 
@@ -31,6 +36,14 @@ function desenhar({ manterRolagem = false } = {}) {
   aba.render(conteudo);
   conteudo.scrollTop = manterRolagem ? rolagem : 0;
 
+  const flutuante = aba.flutuante?.() ?? null;
+  acaoSecundaria = flutuante?.acao ?? null;
+  fabSecundario.hidden = !flutuante;
+  if (flutuante) {
+    fabSecundario.setAttribute('aria-label', flutuante.rotulo);
+    fabSecundario.replaceChildren(icone(flutuante.icone, { tam: 22 }));
+  }
+
   nav.replaceChildren(
     ...ABAS.map((a) =>
       h(
@@ -39,17 +52,69 @@ function desenhar({ manterRolagem = false } = {}) {
           type: 'button',
           class: `aba${a.id === aba.id ? ' ativa' : ''}`,
           'aria-current': a.id === aba.id ? 'page' : null,
-          onclick: () => {
-            if (estado.aba === a.id) return;
-            estado.aba = a.id;
-            salvar();
-            desenhar();
-          },
+          onclick: () => irParaAba(a.id),
         },
         h('span', { class: 'pilula' }, icone(a.id)),
         a.titulo,
       ),
     ),
+  );
+}
+
+// Troca de aba, pelo toque na barra ou pelo deslize. O conteúdo novo entra do
+// lado para onde a pessoa foi: da direita ao avançar, da esquerda ao voltar.
+function irParaAba(id) {
+  const de = ABAS.indexOf(abaAtual());
+  const para = ABAS.findIndex((a) => a.id === id);
+  if (para < 0 || para === de) return;
+
+  estado.aba = id;
+  salvar();
+  desenhar();
+
+  conteudo.classList.remove('entra-da-direita', 'entra-da-esquerda');
+  void conteudo.offsetWidth; // recomeça a animação se a troca anterior ainda não tinha terminado
+  conteudo.classList.add(para > de ? 'entra-da-direita' : 'entra-da-esquerda');
+}
+
+// Deslizar o dedo para o lado troca de aba, como virar a página: para a
+// esquerda vai à aba da direita, para a direita volta à da esquerda.
+function ligarDeslize() {
+  let inicio = null;
+
+  conteudo.addEventListener(
+    'touchstart',
+    (e) => {
+      // Com dois dedos não é deslize. Dentro de uma faixa que rola para os lados
+      // (rotinas, listas), o gesto é da faixa.
+      const vale = e.touches.length === 1 && !e.target.closest('.faixa');
+      inicio = vale ? { x: e.touches[0].clientX, y: e.touches[0].clientY, quando: e.timeStamp } : null;
+    },
+    { passive: true },
+  );
+
+  conteudo.addEventListener(
+    'touchend',
+    (e) => {
+      if (!inicio) return;
+      const fim = e.changedTouches[0];
+      const passo = passoDoDeslize({
+        dx: fim.clientX - inicio.x,
+        dy: fim.clientY - inicio.y,
+        ms: e.timeStamp - inicio.quando,
+      });
+      inicio = null;
+      if (passo) irParaAba(ABAS[vizinha(ABAS.indexOf(abaAtual()), passo, ABAS.length)].id);
+    },
+    { passive: true },
+  );
+
+  conteudo.addEventListener(
+    'touchcancel',
+    () => {
+      inicio = null;
+    },
+    { passive: true },
   );
 }
 
@@ -70,9 +135,15 @@ function bloquear() {
 function iniciar() {
   fab.append(icone('mais', { tam: 28 }));
   fab.addEventListener('click', () => abaAtual().aoAdicionar());
+  fabSecundario.addEventListener('click', () => acaoSecundaria?.());
 
   botaoAjustes.append(icone('ajustes'));
   botaoAjustes.addEventListener('click', abrirAjustes);
+
+  ligarDeslize();
+  conteudo.addEventListener('animationend', (e) => {
+    if (e.target === conteudo) conteudo.classList.remove('entra-da-direita', 'entra-da-esquerda');
+  });
 
   document.addEventListener('foco:redesenhar', () => desenhar({ manterRolagem: true }));
 
@@ -95,7 +166,9 @@ function iniciar() {
     desenhar({ manterRolagem: true });
   };
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) conferirDia();
+    if (document.hidden) return;
+    conferirDia();
+    agendarSincronia(); // lembrete que já passou sai do plano
   });
   setInterval(conferirDia, 60_000);
 
@@ -108,6 +181,10 @@ function iniciar() {
     clearTimeout(esperaLargura);
     esperaLargura = setTimeout(() => desenhar({ manterRolagem: true }), 150);
   });
+
+  // Lembretes: o que está agendado no sistema acompanha os dados salvos.
+  window.addEventListener('foco:salvo', agendarSincronia);
+  agendarSincronia();
 
   desenhar();
 

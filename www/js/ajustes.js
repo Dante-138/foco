@@ -1,11 +1,17 @@
-// Folha de ajustes do app: aparência e backup dos dados.
+// Folha de ajustes do app: aparência, lembretes e backup dos dados.
 
-import { estado, substituirEstado } from './store.js';
+import { estado, salvar, substituirEstado } from './store.js';
 import { hoje } from './nucleo/datas.js';
 import { uid } from './nucleo/ids.js';
 import { MOTIVO, gerarBackup, lerBackup, resumir } from './nucleo/backup.js';
 import { h, abrirFolha, confirmar, campo, avisar, redesenhar } from './ui.js';
 import { temaEscolhido, definirTema } from './tema.js';
+import {
+  agendarSincronia,
+  lembretesDisponiveis,
+  pedirPermissaoDeLembretes,
+  permissaoDeLembretes,
+} from './lembretes.js';
 
 const TEMAS = [
   ['escuro', 'Escuro'],
@@ -119,6 +125,63 @@ function abrirRestauracao() {
   });
 }
 
+// ------------------------------------------------------------- lembretes
+
+const SITUACAO_DOS_LEMBRETES = {
+  granted: 'Tarefa com horário avisa na hora; só com data, às 9h.',
+  denied: 'As notificações do Foco estão bloqueadas nas configurações do Android.',
+};
+
+function secaoDeLembretes() {
+  if (!lembretesDisponiveis()) {
+    return h(
+      'div',
+      { class: 'rotulo' },
+      'Lembretes',
+      h('p', { class: 'dica' }, 'Os lembretes das tarefas funcionam no app Android.'),
+    );
+  }
+
+  const situacao = h('p', { class: 'dica' });
+  const interruptor = h('button', { type: 'button', class: 'botao contorno', role: 'switch' });
+  const permitir = h(
+    'button',
+    { type: 'button', class: 'botao contorno', hidden: true },
+    'Permitir notificações',
+  );
+
+  const desenhar = async () => {
+    const ligados = estado.lembretes;
+    interruptor.setAttribute('aria-checked', String(ligados));
+    interruptor.textContent = ligados ? 'Lembretes ligados' : 'Lembretes desligados';
+    const permissao = ligados ? await permissaoDeLembretes() : null;
+    permitir.hidden = !ligados || permissao === 'granted' || permissao === 'denied';
+    situacao.textContent = ligados
+      ? (SITUACAO_DOS_LEMBRETES[permissao] ?? 'Falta permitir as notificações.')
+      : 'Nenhuma tarefa avisa.';
+  };
+
+  interruptor.addEventListener('click', () => {
+    estado.lembretes = !estado.lembretes;
+    salvar(); // quem salva avisa os lembretes, que agendam ou cancelam tudo
+    desenhar();
+  });
+  permitir.addEventListener('click', async () => {
+    await pedirPermissaoDeLembretes();
+    agendarSincronia();
+    desenhar();
+  });
+  desenhar();
+
+  return h(
+    'div',
+    { class: 'rotulo' },
+    'Lembretes',
+    h('div', { class: 'linha-botoes inicio' }, interruptor, permitir),
+    situacao,
+  );
+}
+
 // ---------------------------------------------------------------- folha
 
 export function abrirAjustes() {
@@ -151,6 +214,7 @@ export function abrirAjustes() {
       'div',
       { class: 'folha-form' },
       h('div', { class: 'rotulo' }, 'Aparência', segmentos),
+      secaoDeLembretes(),
       h(
         'div',
         { class: 'rotulo' },

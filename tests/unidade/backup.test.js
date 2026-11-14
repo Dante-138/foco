@@ -12,10 +12,16 @@ function comDados() {
   return {
     ...estadoInicial(contexto()),
     rotinas: [
-      { id: 'r', nome: 'Manhã', itens: [{ id: 'i', tipo: 'item', texto: 'Acordar', hora: '06:30' }] },
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [{ id: 'i', tipo: 'item', texto: 'Acordar', hora: '06:30', habitoId: 'h' }],
+      },
     ],
     rotinaAtiva: 'r',
-    habitos: [{ id: 'h', nome: 'Leitura', cor: 'lilas', tipo: 'simnao', unidade: null, meta: null }],
+    habitos: [
+      { id: 'h', nome: 'Leitura', cor: 'lilas', tipo: 'simnao', unidade: null, meta: null, arquivado: true },
+    ],
     registros: { h: { '2026-11-12': 'feito', '2026-11-11': 'pulado' } },
     listas: [{ id: 'l', nome: 'Faculdade' }],
     listaAtiva: 'l',
@@ -26,6 +32,8 @@ function comDados() {
         titulo: 'Prova',
         notas: '',
         prazo: '2026-11-26',
+        hora: '08:00',
+        repeticao: { cada: 1, unidade: 'mes' },
         estrela: false,
         feita: false,
         criadaEm: 1,

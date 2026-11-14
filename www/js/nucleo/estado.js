@@ -2,7 +2,7 @@
 // Sem acesso a armazenamento: quem lê e grava o texto é store.js.
 
 import { VERSAO, migrar } from './migracao.js';
-import { ABAS, NOME_LISTA_PADRAO, ehObjeto, sanear } from './esquema.js';
+import { ABAS, NOME_LISTA_PADRAO, ORDENS_TAREFAS, ehObjeto, sanear } from './esquema.js';
 
 export const PROBLEMA = Object.freeze({
   ILEGIVEL: 'ilegivel', // o texto salvo não é JSON de um objeto
@@ -17,11 +17,16 @@ export function estadoInicial({ dia, gerarId }) {
     rotinas: [],
     rotinaAtiva: null,
     marcasRotina: { data: dia, porRotina: {} },
+    marcadosNoFim: true,
     habitos: [],
     registros: {},
+    ocultarConcluidos: false,
+    ocultarArquivados: true,
     listas: [lista],
     listaAtiva: lista.id,
     tarefas: [],
+    ordemTarefas: ORDENS_TAREFAS[0],
+    lembretes: true,
   };
 }
 

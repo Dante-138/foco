@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -38,4 +39,12 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Resposta tátil ao marcar hábito e concluir tarefa (navigator.vibrate na página). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+      Lembretes das tarefas (plugin de notificações locais). O plugin declara também o
+      alarme exato, que o app não usa: os lembretes são agendados como não exatos
+      (www/js/lembretes.js), então essa permissão é retirada.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
 </manifest>

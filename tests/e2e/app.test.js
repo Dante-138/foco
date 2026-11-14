@@ -29,15 +29,18 @@ after(async () => {
 });
 
 // Abre o app em um contexto isolado. "salvo" é o texto gravado no
-// armazenamento antes de o app carregar (undefined = nada salvo).
-async function abrir(t, { salvo, esquemaDeCor = 'dark' } = {}) {
+// armazenamento antes de o app carregar (undefined = nada salvo). "toque" liga a
+// tela de toque no navegador, para os testes de gesto.
+async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false, preparar } = {}) {
   const contexto = await navegador.newContext({
     viewport: { width: 500, height: 1000 },
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     colorScheme: esquemaDeCor,
+    hasTouch: toque,
   });
   t.after(() => contexto.close());
+  await preparar?.(contexto); // para o teste instalar algo antes de o app carregar
 
   const erros = [];
   const novaPagina = async () => {
@@ -79,8 +82,68 @@ async function voltar(pagina) {
   await pagina.goBack();
 }
 
+// Recarrega a página depois que o histórico assentou. Fechar uma folha desfaz a guarda
+// do histórico com um history.back() que só termina um instante depois; recarregar no
+// meio disso aborta a navegação (net::ERR_ABORTED). Assentado quer dizer: a guarda
+// existe se, e somente se, há uma folha aberta.
+async function recarregar(pagina) {
+  await pagina.waitForFunction(
+    () => (document.querySelector('dialog[open]') !== null) === (window.history.state?.folha === true),
+    null,
+    ESPERA,
+  );
+  await pagina.reload();
+}
+
 async function esperarTema(pagina, esperado) {
   await pagina.waitForFunction((valor) => document.documentElement.dataset.tema === valor, esperado, ESPERA);
+}
+
+// Põe no lugar do plugin de notificações do Android um sistema de mentira, que guarda o
+// que o app agenda e cancela em window.sistemaDeLembretes. "permissao" é a resposta inicial.
+const comLembretes = (permissao) => (contexto) =>
+  contexto.addInitScript((inicial) => {
+    const sistema = { permissao: inicial, pedidos: 0, pendentes: [] };
+    window.sistemaDeLembretes = sistema;
+    window.Capacitor = {
+      Plugins: {
+        LocalNotifications: {
+          checkPermissions: () => Promise.resolve({ display: sistema.permissao }),
+          requestPermissions: () => {
+            sistema.pedidos += 1;
+            sistema.permissao = 'granted';
+            return Promise.resolve({ display: 'granted' });
+          },
+          getPending: () => Promise.resolve({ notifications: sistema.pendentes.map(({ id }) => ({ id })) }),
+          cancel: ({ notifications }) => {
+            const ids = new Set(notifications.map((n) => n.id));
+            sistema.pendentes = sistema.pendentes.filter((n) => !ids.has(n.id));
+            return Promise.resolve();
+          },
+          schedule: ({ notifications }) => {
+            sistema.pendentes.push(...notifications);
+            return Promise.resolve({ notifications: notifications.map(({ id }) => ({ id })) });
+          },
+        },
+      },
+    };
+  }, permissao);
+
+async function esperarTitulo(pagina, esperado) {
+  await pagina.waitForFunction((valor) => document.title === valor, esperado, ESPERA);
+}
+
+// Um dedo de verdade na tela (pela interface de depuração do Chrome), de um ponto a outro.
+// Precisa do contexto aberto com toque: true.
+async function deslizar(pagina, de, para) {
+  const cdp = await pagina.context().newCDPSession(pagina);
+  const dedo = ([x, y]) => [{ x, y }];
+  const meio = [(de[0] + para[0]) / 2, (de[1] + para[1]) / 2];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: dedo(de) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: dedo(meio) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: dedo(para) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
 }
 
 // ------------------------------------------------------------------ abertura
@@ -114,13 +177,13 @@ test('rotina: cria pelo texto, marca um item e mantém depois de recarregar', as
   await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
   await visivel(pagina.getByText('1 de 2 hoje'));
 
-  await pagina.reload();
+  await recarregar(pagina);
   await visivel(pagina.getByText('1 de 2 hoje'));
   assert.equal(await pagina.getByRole('checkbox', { name: /Levantar/ }).getAttribute('aria-checked'), 'true');
   assert.equal(await pagina.getByRole('checkbox', { name: /Arrumar/ }).getAttribute('aria-checked'), 'false');
 
   const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
-  assert.equal(salvo.versao, 2);
+  assert.equal(salvo.versao, 4);
   assert.deepEqual(
     salvo.rotinas[0].itens.map((i) => [i.tipo, i.hora, i.texto]),
     [
@@ -143,6 +206,199 @@ test('rotina: sair da edição com texto alterado pede confirmação', async (t)
   await botao(pagina, 'Descartar').click();
   await visivel(pagina.getByText('Nenhuma rotina ainda'));
   assert.equal(await pagina.locator('dialog').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
+test('rotina ligada a hábito: marcar o item marca o hábito; desfazer e desmarcar tudo desfazem', async (t) => {
+  const habito = (id, nome, extra) => ({
+    id,
+    nome,
+    cor: 'azul',
+    tipo: 'simnao',
+    unidade: null,
+    meta: null,
+    arquivado: false,
+    ...extra,
+  });
+  const item = (id, texto) => ({ id, tipo: 'item', texto, hora: null, habitoId: null });
+  const salvo = JSON.stringify({
+    versao: 4,
+    habitos: [
+      habito('cama', 'Arrumar a cama - <8h'),
+      habito('agua', 'Beber água', { tipo: 'numero', unidade: 'copos', meta: 2 }),
+      habito('ler', 'Leitura'),
+    ],
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          item('1', 'Arrumar a cama'),
+          item('2', 'Beber água'),
+          item('3', 'Beber água'),
+          item('4', 'Escovar os dentes'),
+        ],
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  // Registro de hoje de cada hábito que tem algum: { idDoHabito: valor }
+  const registros = async () => {
+    const e = JSON.parse(await lerSalvo(pagina, CHAVE));
+    return Object.fromEntries(Object.entries(e.registros).map(([id, r]) => [id, Object.values(r)[0]]));
+  };
+
+  // A sugestão pelo nome liga "Arrumar a cama" e os dois "Beber água"; "Escovar os dentes" fica sem.
+  await botao(pagina, 'Opções da rotina').click();
+  await botao(pagina, 'Ligar itens a hábitos').click();
+  await botao(pagina, 'Sugerir pelo nome').click();
+  await visivel(pagina.getByText('3 sugestões. Confira e salve.'));
+  assert.deepEqual(
+    await pagina.locator('.ligacao select').evaluateAll((lista) => lista.map((s) => s.value)),
+    ['cama', 'agua', 'agua', ''],
+  );
+  await botao(pagina, 'Salvar').click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.rotina-item .elo').length === 3,
+    null,
+    ESPERA,
+  );
+
+  // Marcar o item marca o hábito: sim ou não vira "feito", numérico soma 1 por item.
+  await pagina.getByRole('checkbox', { name: /Arrumar a cama/ }).click();
+  await pagina
+    .getByRole('checkbox', { name: /Beber água/ })
+    .first()
+    .click();
+  await visivel(pagina.getByText('2 de 4 hoje'));
+  assert.deepEqual(await registros(), { cama: 'feito', agua: 1 });
+  await pagina
+    .getByRole('checkbox', { name: /Beber água/ })
+    .first()
+    .click();
+  await visivel(pagina.getByText('3 de 4 hoje'));
+  assert.deepEqual(await registros(), { cama: 'feito', agua: 2 });
+
+  await botao(pagina, 'Hábitos').click();
+  await visivel(botao(pagina, 'Arrumar a cama - <8h, hoje: feito'));
+  await visivel(botao(pagina, 'Beber água, hoje: 2 copos'));
+  await visivel(botao(pagina, 'Leitura, hoje: não feito'));
+
+  // Desfazer volta a última marca (um "Beber água"); desmarcar tudo zera o resto.
+  await botao(pagina, 'Rotinas').click();
+  await botao(pagina, 'Desfazer a última marca').click();
+  await visivel(pagina.getByText('2 de 4 hoje'));
+  assert.deepEqual(await registros(), { cama: 'feito', agua: 1 });
+
+  await botao(pagina, 'Opções da rotina').click();
+  await botao(pagina, 'Desmarcar tudo').click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  assert.deepEqual(await registros(), {});
+  assert.deepEqual(erros, []);
+});
+
+// Cria a rotina usada nos dois testes abaixo: duas seções, quatro itens.
+async function criarRotinaDaManha(pagina) {
+  await botao(pagina, 'Nova rotina').click();
+  await pagina.getByLabel('Nome').fill('Manhã');
+  await pagina
+    .getByLabel('Itens')
+    .fill('# ACORDAR\nLevantar\nBeber água\nArrumar a cama\n# SAIR\nPegar a chave');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+}
+
+test('rotina: item marcado vai para a área de marcados, com a seção repetida, e o desfazer flutua', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const itens = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
+  const secoes = (area) => pagina.locator(`${area} .secao-nome`).allTextContents();
+  const desfazer = botao(pagina, 'Desfazer a última marca');
+
+  await criarRotinaDaManha(pagina);
+  assert.equal(await desfazer.isVisible(), false); // sem marca, não há o que desfazer
+  assert.equal(await pagina.locator('.area-marcados').count(), 0);
+
+  // O item marcado sai da seção e vai para a área de baixo, que repete o nome da seção.
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.deepEqual(await itens('.area-pendentes'), ['Beber água', 'Arrumar a cama', 'Pegar a chave']);
+  assert.deepEqual(await itens('.area-marcados'), ['Levantar']);
+  assert.deepEqual(await secoes('.area-pendentes'), ['ACORDAR', 'SAIR']);
+  assert.deepEqual(await secoes('.area-marcados'), ['ACORDAR']);
+
+  // Seção sem item pendente some da área de cima.
+  await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).click();
+  await visivel(pagina.getByText('2 de 4 hoje'));
+  assert.deepEqual(await secoes('.area-pendentes'), ['ACORDAR']);
+  assert.deepEqual(await secoes('.area-marcados'), ['ACORDAR', 'SAIR']);
+
+  // O desfazer é um botão flutuante, fora da lista: volta a última marca.
+  assert.equal(await desfazer.evaluate((el) => getComputedStyle(el).position), 'fixed');
+  await desfazer.click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.deepEqual(await secoes('.area-pendentes'), ['ACORDAR', 'SAIR']);
+
+  // A área de marcados recolhe e abre.
+  await botao(pagina, 'Marcados (1)').click();
+  assert.deepEqual(await itens('.area-marcados'), []);
+  await botao(pagina, 'Marcados (1)').click();
+  assert.deepEqual(await itens('.area-marcados'), ['Levantar']);
+
+  // Com a opção desligada, os itens ficam onde foram escritos e não há área de marcados.
+  await botao(pagina, 'Opções da rotina').click();
+  await pagina.getByRole('switch', { name: 'Marcados no fim' }).click();
+  await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  assert.deepEqual(await itens('.area-pendentes'), [
+    'Levantar',
+    'Beber água',
+    'Arrumar a cama',
+    'Pegar a chave',
+  ]);
+  assert.equal(await pagina.locator('.area-marcados').count(), 0);
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).marcadosNoFim, false);
+  assert.deepEqual(erros, []);
+});
+
+test('rotina: a caixa da seção marca e desmarca o bloco inteiro, e o desfazer volta o bloco de uma vez', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const itens = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
+  const secoes = (area) => pagina.locator(`${area} .secao-nome`).allTextContents();
+  const desfazer = botao(pagina, 'Desfazer a última marca');
+
+  await criarRotinaDaManha(pagina);
+  await pagina.getByRole('checkbox', { name: /Beber água/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+
+  // Marcar a seção leva de uma vez os dois itens que faltavam nela.
+  await pagina.getByRole('checkbox', { name: 'Marcar a seção ACORDAR', exact: true }).click();
+  await visivel(pagina.getByText('3 de 4 hoje'));
+  assert.deepEqual(await secoes('.area-pendentes'), ['SAIR']);
+  assert.deepEqual(await itens('.area-marcados'), ['Levantar', 'Beber água', 'Arrumar a cama']);
+
+  // Um desfazer volta o bloco marcado de uma vez; o seguinte volta o item marcado antes.
+  await desfazer.click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.deepEqual(await itens('.area-marcados'), ['Beber água']);
+  await desfazer.click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  assert.equal(await desfazer.isVisible(), false);
+
+  // Na área de marcados, a caixa da seção devolve o bloco inteiro.
+  await pagina.getByRole('checkbox', { name: 'Marcar a seção ACORDAR', exact: true }).click();
+  await visivel(pagina.getByText('3 de 4 hoje'));
+  await pagina.getByRole('checkbox', { name: 'Desmarcar a seção ACORDAR' }).click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  assert.deepEqual(await itens('.area-pendentes'), [
+    'Levantar',
+    'Beber água',
+    'Arrumar a cama',
+    'Pegar a chave',
+  ]);
+
+  // Tudo marcado: a área de cima dá o recado.
+  await pagina.getByRole('checkbox', { name: 'Marcar a seção ACORDAR', exact: true }).click();
+  await pagina.getByRole('checkbox', { name: 'Marcar a seção SAIR', exact: true }).click();
+  await visivel(pagina.getByText('Rotina concluída'));
   assert.deepEqual(erros, []);
 });
 
@@ -194,7 +450,447 @@ test('hábito numérico: aceita milhar no costume brasileiro e recusa texto que 
   assert.deepEqual(erros, []);
 });
 
+test('hábito: cumprir destaca a célula e o anel; as outras marcas só dão o pulo curto', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const classes = (alvo) => alvo.evaluate((el) => [...el.classList]);
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+
+  await botao(pagina, 'Leitura, hoje: não feito').click();
+  const feita = botao(pagina, 'Leitura, hoje: feito');
+  await visivel(feita);
+  assert.ok((await classes(feita)).includes('concluiu'));
+  assert.equal(await pagina.locator('.anel.pulsa').count(), 1);
+
+  await feita.click();
+  const pulada = botao(pagina, 'Leitura, hoje: pulado');
+  await visivel(pulada);
+  assert.ok((await classes(pulada)).includes('marcou'));
+  assert.ok(!(await classes(pulada)).includes('concluiu'));
+  assert.equal(await pagina.locator('.anel.pulsa').count(), 0);
+
+  // Um redesenho que não veio de um toque (aqui, a largura da tela mudou) não repete a animação.
+  await pagina.setViewportSize({ width: 640, height: 1000 });
+  await pagina.waitForFunction(() => !document.querySelector('.cel.marcou, .cel.concluiu'), null, ESPERA);
+  await visivel(pulada);
+  assert.deepEqual(erros, []);
+});
+
+test('hábito: a edição mostra a pontuação e as sequências, e o anel acompanha', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const tracoDoAnel = () =>
+    pagina.evaluate(() =>
+      Number(
+        document.querySelector('.anel circle:last-child').getAttribute('stroke-dasharray').split(' ')[0],
+      ),
+    );
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+  await visivel(botao(pagina, 'Leitura, hoje: não feito'));
+  assert.equal(await tracoDoAnel(), 0);
+
+  // Hoje, ontem e anteontem feitos: três dias seguidos.
+  for (const coluna of [0, 1, 2]) await pagina.locator('.habito .cel').nth(coluna).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.habito .cel:not(.vazio)').length === 3,
+    null,
+    ESPERA,
+  );
+  assert.ok((await tracoDoAnel()) > 0);
+
+  await botao(pagina, 'Editar Leitura').click();
+  await visivel(pagina.getByText('Pontuação 15%. Sequência atual: 3 dias. Melhor: 3 dias.'));
+  await botao(pagina, 'Cancelar').click();
+
+  // Ontem volta para "não feito" (feito -> pulado -> vazio): a sequência atual fica só com hoje.
+  await pagina.locator('.habito .cel').nth(1).click();
+  await pagina.locator('.habito .cel').nth(1).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.habito .cel.vazio').length >= 1,
+    null,
+    ESPERA,
+  );
+  await botao(pagina, 'Editar Leitura').click();
+  await visivel(pagina.getByText(/Sequência atual: 1 dia\. Melhor: 1 dia\./));
+  assert.deepEqual(erros, []);
+});
+
+test('hábitos: ocultar concluídos esconde o que já foi resolvido hoje, e o filtro traz de volta', async (t) => {
+  const habito = (id, nome) => ({
+    id,
+    nome,
+    cor: 'azul',
+    tipo: 'simnao',
+    unidade: null,
+    meta: null,
+    arquivado: false,
+  });
+  const salvo = JSON.stringify({
+    versao: 3,
+    aba: 'habitos',
+    habitos: [habito('a', 'Leitura'), habito('b', 'Água')],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const filtro = pagina.locator('.filtro');
+  const sumiu = (nome) =>
+    pagina.waitForFunction((n) => !document.querySelector(`[aria-label^="${n}, hoje"]`), nome, ESPERA);
+
+  await filtro.click();
+  await pagina.getByRole('switch', { name: 'Ocultar concluídos' }).click();
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).ocultarConcluidos, true);
+
+  // Marcado como feito, o hábito ainda mostra a resposta ao toque e só depois sai da grade.
+  await botao(pagina, 'Leitura, hoje: não feito').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  await sumiu('Leitura');
+  await visivel(botao(pagina, 'Água, hoje: não feito'));
+  assert.equal(await filtro.textContent(), 'Filtro: 1 oculto');
+
+  // Com todos resolvidos, a grade avisa e o filtro continua ao alcance.
+  await botao(pagina, 'Água, hoje: não feito').click();
+  await sumiu('Água');
+  await visivel(pagina.getByText('Tudo feito por hoje'));
+  assert.equal(await filtro.textContent(), 'Filtro: 2 ocultos');
+
+  // Desligar o filtro traz os dois de volta, e a escolha fica salva.
+  await filtro.click();
+  const interruptor = pagina.getByRole('switch', { name: 'Ocultar concluídos' });
+  assert.equal(await interruptor.getAttribute('aria-checked'), 'true');
+  await interruptor.click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  await visivel(botao(pagina, 'Água, hoje: feito'));
+  assert.equal(await filtro.textContent(), 'Filtro');
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).ocultarConcluidos, false);
+  assert.deepEqual(erros, []);
+});
+
+test('hábitos: arquivar tira da grade sem apagar; o filtro mostra e dá para desarquivar', async (t) => {
+  const { pagina, erros } = await abrir(t);
+
+  await botao(pagina, 'Hábitos').click();
+  await botao(pagina, 'Novo hábito').click();
+  await pagina.getByLabel('Nome').fill('Leitura');
+  await botao(pagina, 'Salvar').click();
+  await botao(pagina, 'Leitura, hoje: não feito').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+
+  await botao(pagina, 'Editar Leitura').click();
+  await botao(pagina, 'Arquivar').click();
+  await visivel(pagina.getByText('Nenhum hábito ativo'));
+  await visivel(pagina.getByText(/Hábito arquivado/));
+  const salvo = JSON.parse(await lerSalvo(pagina, CHAVE));
+  assert.equal(salvo.habitos[0].arquivado, true);
+  assert.deepEqual(Object.values(salvo.registros[salvo.habitos[0].id]), ['feito']); // o histórico fica
+
+  await pagina.locator('.filtro').click();
+  await pagina.getByRole('switch', { name: 'Ocultar arquivados' }).click();
+  await visivel(pagina.locator('.habito.arquivado'));
+  await visivel(pagina.getByText('arquivado', { exact: true }));
+
+  await botao(pagina, 'Editar Leitura').click();
+  await botao(pagina, 'Desarquivar').click();
+  await visivel(botao(pagina, 'Leitura, hoje: feito'));
+  assert.equal(await pagina.locator('.habito.arquivado').count(), 0);
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).habitos[0].arquivado, false);
+  assert.deepEqual(erros, []);
+});
+
 // ------------------------------------------------------------------- tarefas
+
+test('tarefas: ordenar por data, estrela, título e criação; a escolha vale para todas as listas', async (t) => {
+  const tarefa = (id, titulo, extra) => ({
+    id,
+    listaId: 'l',
+    titulo,
+    notas: '',
+    prazo: null,
+    estrela: false,
+    feita: false,
+    feitaEm: null,
+    ...extra,
+  });
+  const salvo = JSON.stringify({
+    versao: 3,
+    aba: 'tarefas',
+    listas: [
+      { id: 'l', nome: 'Faculdade' },
+      { id: 'outra', nome: 'Outra' },
+    ],
+    listaAtiva: 'l',
+    tarefas: [
+      tarefa('1', 'Zebra', { criadaEm: 1, prazo: '2030-01-10' }),
+      tarefa('2', 'abacaxi', { criadaEm: 2, estrela: true }),
+      tarefa('3', 'Maçã', { criadaEm: 3, prazo: '2030-01-05' }),
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const titulos = () => pagina.locator('.tarefa-titulo').allTextContents();
+  const ordenarPor = async (rotulo) => {
+    await botao(pagina, 'Opções da lista').click();
+    await pagina.getByRole('button', { name: /^Ordenar por:/ }).click();
+    await botao(pagina, rotulo).click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+
+  // Padrão: por data, em grupos, com as sem data no fim.
+  await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
+  assert.deepEqual(await titulos(), ['Maçã', 'Zebra', 'abacaxi']);
+
+  await ordenarPor('Título');
+  assert.deepEqual(await titulos(), ['abacaxi', 'Maçã', 'Zebra']);
+  assert.equal(await pagina.getByRole('heading', { name: 'Sem data' }).count(), 0); // lista única, sem grupos
+  await visivel(pagina.getByText(/5 de jan\. de 2030/)); // sem o grupo, a data vai na linha
+
+  await ordenarPor('Com estrela primeiro');
+  assert.deepEqual(await titulos(), ['abacaxi', 'Maçã', 'Zebra']);
+  await ordenarPor('Mais recentes primeiro');
+  assert.deepEqual(await titulos(), ['Maçã', 'abacaxi', 'Zebra']);
+
+  // A opção escolhida aparece marcada no menu e fica salva.
+  await botao(pagina, 'Opções da lista').click();
+  await visivel(botao(pagina, 'Ordenar por: Mais recentes primeiro'));
+  await botao(pagina, 'Ordenar por: Mais recentes primeiro').click();
+  assert.equal(await botao(pagina, 'Mais recentes primeiro').getAttribute('aria-current'), 'true');
+  assert.equal(await botao(pagina, 'Data').getAttribute('aria-current'), null);
+  await botao(pagina, 'Data').click();
+  await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).ordemTarefas, 'data');
+
+  // A visão "com estrela" tem o mesmo menu de ordem.
+  await botao(pagina, 'Com estrela').click();
+  await botao(pagina, 'Ordenar por').click();
+  await visivel(botao(pagina, 'Título'));
+  assert.deepEqual(erros, []);
+});
+
+test('tarefas: lista só com concluídas mostra a mensagem no alto, com folga até as concluídas', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 2,
+    aba: 'tarefas',
+    listas: [
+      { id: 'feitas', nome: 'Feitas' },
+      { id: 'vazia', nome: 'Vazia' },
+    ],
+    listaAtiva: 'feitas',
+    tarefas: [
+      {
+        id: 't1',
+        listaId: 'feitas',
+        titulo: 'Pagar o boleto',
+        notas: '',
+        prazo: null,
+        estrela: false,
+        feita: true,
+        criadaEm: 1,
+        feitaEm: 2,
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+
+  await visivel(pagina.getByText('Tudo concluído'));
+  await visivel(botao(pagina, 'Concluídas (1)'));
+  const medidas = await pagina.evaluate(() => {
+    const dica = document.querySelector('.sem-conteudo.compacto p:last-child').getBoundingClientRect();
+    const concluidas = document.querySelector('.concluidas-topo').getBoundingClientRect();
+    return { folga: concluidas.top - dica.bottom, topoDaDica: dica.top, alturaDaTela: window.innerHeight };
+  });
+  assert.ok(medidas.folga >= 24, `folga de ${medidas.folga}px entre a mensagem e as concluídas`);
+  assert.ok(medidas.topoDaDica < medidas.alturaDaTela * 0.4, 'a mensagem não vai para o meio da tela');
+
+  // Lista sem nenhuma tarefa: não há nada abaixo, então a mensagem continua no meio da tela.
+  await botao(pagina, 'Vazia').click();
+  await visivel(pagina.getByText('Nenhuma tarefa aqui'));
+  assert.equal(await pagina.locator('.sem-conteudo.compacto').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
+test('tarefa com horário: aparece na linha, ordena o dia pelo relógio e vale para hoje se faltar a data', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const criar = async (titulo, { hoje = false, hora } = {}) => {
+    await botao(pagina, 'Nova tarefa').click();
+    await pagina.getByLabel('Título').fill(titulo);
+    if (hoje) await botao(pagina, 'Hoje').click();
+    if (hora) await pagina.locator('dialog[open] input[type=time]').fill(hora);
+    await botao(pagina, 'Salvar').click();
+    await visivel(pagina.getByText(titulo));
+  };
+
+  await botao(pagina, 'Tarefas').click();
+  await criar('Sem horário', { hoje: true });
+  await criar('Reunião da tarde', { hoje: true, hora: '14:30' });
+  await criar('Café da manhã', { hora: '07:15' }); // só o horário: a data vira hoje
+
+  await visivel(pagina.getByRole('heading', { name: 'Hoje', exact: true }));
+  assert.equal(await pagina.getByRole('heading', { name: 'Sem data' }).count(), 0);
+  assert.deepEqual(await pagina.locator('.tarefa-titulo').allTextContents(), [
+    'Café da manhã',
+    'Reunião da tarde',
+    'Sem horário',
+  ]);
+  await visivel(pagina.getByText('07:15', { exact: true }));
+  await visivel(pagina.getByText('14:30', { exact: true }));
+
+  const salvas = JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas;
+  assert.deepEqual(
+    salvas.map((x) => [x.titulo, x.hora, x.prazo === salvas[0].prazo]),
+    [
+      ['Sem horário', null, true],
+      ['Reunião da tarde', '14:30', true],
+      ['Café da manhã', '07:15', true],
+    ],
+  );
+
+  // "Sem data" na edição tira também o horário.
+  await pagina.locator('.tarefa-corpo', { hasText: 'Reunião da tarde' }).click();
+  await botao(pagina, 'Sem data').click();
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
+  const reuniao = JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas.find(
+    (x) => x.titulo === 'Reunião da tarde',
+  );
+  assert.deepEqual([reuniao.prazo, reuniao.hora], [null, null]);
+  assert.deepEqual(erros, []);
+});
+
+test('tarefa que se repete: ao concluir, a próxima ocorrência aparece na data seguinte', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const salvas = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas;
+  const dias = (de, ate) => Math.round((new Date(ate) - new Date(de)) / 86_400_000);
+
+  await botao(pagina, 'Tarefas').click();
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Regar as plantas');
+  assert.equal(await pagina.getByLabel('A cada').isVisible(), false); // só aparece quando repete
+  await pagina.getByLabel('Repetir').selectOption('semana');
+  await pagina.getByLabel('A cada').fill('2');
+  await botao(pagina, 'Salvar').click();
+
+  // Repetição sem data começa hoje, e a linha diz de quanto em quanto tempo.
+  await visivel(pagina.getByRole('heading', { name: 'Hoje', exact: true }));
+  await visivel(pagina.getByText('repete a cada 2 semanas'));
+  const [original] = await salvas();
+  assert.deepEqual(original.repeticao, { cada: 2, unidade: 'semana' });
+
+  await pagina.getByRole('checkbox', { name: 'Concluir: Regar as plantas' }).click();
+  await visivel(botao(pagina, 'Concluídas (1)'));
+  await visivel(pagina.getByText('1 pendente', { exact: true }));
+  assert.equal(await pagina.getByRole('heading', { name: 'Hoje', exact: true }).count(), 0);
+
+  const depois = await salvas();
+  assert.equal(depois.length, 2);
+  const feita = depois.find((x) => x.feita);
+  const proxima = depois.find((x) => !x.feita);
+  assert.equal(feita.repeticao, null); // a série segue só na ocorrência nova
+  assert.deepEqual(proxima.repeticao, { cada: 2, unidade: 'semana' });
+  assert.equal(proxima.titulo, 'Regar as plantas');
+  assert.equal(dias(original.prazo, proxima.prazo), 14);
+  assert.notEqual(proxima.id, feita.id);
+
+  // Tirar a data na edição tira também a repetição.
+  await pagina.locator('.tarefa-corpo', { hasText: 'Regar as plantas' }).first().click();
+  await botao(pagina, 'Sem data').click();
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByRole('heading', { name: 'Sem data' }));
+  assert.equal((await salvas()).find((x) => !x.feita).repeticao, null);
+  assert.deepEqual(erros, []);
+});
+
+test('tarefas: mover a lista para os lados muda a ordem na faixa do topo', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 4,
+    aba: 'tarefas',
+    listas: [
+      { id: 'a', nome: 'Trabalho' },
+      { id: 'b', nome: 'Faculdade' },
+      { id: 'c', nome: 'Contas' },
+    ],
+    listaAtiva: 'b',
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  // Os chips do meio são as listas: o primeiro é a estrela e o último é "Nova lista".
+  const ordem = async () => (await pagina.locator('.faixa .chip').allTextContents()).slice(1, -1);
+  const mover = async (rotulo) => {
+    await botao(pagina, 'Opções da lista').click();
+    await botao(pagina, rotulo).click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+
+  assert.deepEqual(await ordem(), ['Trabalho', 'Faculdade', 'Contas']);
+  await mover('Mover para a esquerda');
+  assert.deepEqual(await ordem(), ['Faculdade', 'Trabalho', 'Contas']);
+
+  // Na ponta, a opção daquele lado fica desativada.
+  await botao(pagina, 'Opções da lista').click();
+  assert.equal(await botao(pagina, 'Mover para a esquerda').isDisabled(), true);
+  await botao(pagina, 'Mover para a direita').click();
+  await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  await mover('Mover para a direita');
+  assert.deepEqual(await ordem(), ['Trabalho', 'Contas', 'Faculdade']);
+  await botao(pagina, 'Opções da lista').click();
+  assert.equal(await botao(pagina, 'Mover para a direita').isDisabled(), true);
+
+  assert.deepEqual(
+    JSON.parse(await lerSalvo(pagina, CHAVE)).listas.map((l) => l.nome),
+    ['Trabalho', 'Contas', 'Faculdade'],
+  );
+  assert.deepEqual(erros, []);
+});
+
+test('tarefas: excluir concluídas apaga só as concluídas da lista, depois de confirmar', async (t) => {
+  const tarefa = (id, listaId, titulo, feita) => ({
+    id,
+    listaId,
+    titulo,
+    notas: '',
+    prazo: null,
+    estrela: false,
+    feita,
+    criadaEm: 1,
+    feitaEm: feita ? 2 : null,
+  });
+  const salvo = JSON.stringify({
+    versao: 3,
+    aba: 'tarefas',
+    listas: [
+      { id: 'a', nome: 'Faculdade' },
+      { id: 'b', nome: 'Pessoal' },
+    ],
+    listaAtiva: 'a',
+    tarefas: [
+      tarefa('1', 'a', 'Pendente da faculdade', false),
+      tarefa('2', 'a', 'Feita da faculdade', true),
+      tarefa('3', 'a', 'Outra feita da faculdade', true),
+      tarefa('4', 'b', 'Feita pessoal', true),
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const titulosSalvos = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).tarefas.map((x) => x.titulo);
+
+  // Cancelar não apaga nada.
+  await botao(pagina, 'Opções da lista').click();
+  await botao(pagina, 'Excluir concluídas').click();
+  await visivel(pagina.getByText('Excluir as 2 tarefas concluídas da lista "Faculdade"?'));
+  await botao(pagina, 'Cancelar').click();
+  await visivel(botao(pagina, 'Concluídas (2)'));
+
+  await botao(pagina, 'Opções da lista').click();
+  await botao(pagina, 'Excluir concluídas').click();
+  await botao(pagina, 'Excluir').click();
+  await pagina.waitForFunction(() => !document.querySelector('.concluidas-topo'), null, ESPERA);
+  assert.deepEqual(await titulosSalvos(), ['Pendente da faculdade', 'Feita pessoal']);
+
+  // Sem concluídas na lista, a opção fica desativada.
+  await botao(pagina, 'Opções da lista').click();
+  assert.equal(await botao(pagina, 'Excluir concluídas').isDisabled(), true);
+  assert.deepEqual(erros, []);
+});
 
 test('tarefa: cria com prazo de hoje, marca estrela, conclui e reabre', async (t) => {
   const { pagina, erros } = await abrir(t);
@@ -222,6 +918,152 @@ test('tarefa: cria com prazo de hoje, marca estrela, conclui e reabre', async (t
   assert.deepEqual(erros, []);
 });
 
+test('tarefa: ao concluir, a linha mostra a marca e o risco antes de sair da lista', async (t) => {
+  const { pagina, erros } = await abrir(t);
+
+  await botao(pagina, 'Tarefas').click();
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Pagar o boleto');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByText('1 pendente', { exact: true }));
+
+  // O toque e a leitura acontecem no mesmo passo, para ver a tela logo depois do toque.
+  const logoDepois = await pagina.evaluate((chave) => {
+    const check = document.querySelector('.tarefa-check');
+    check.click();
+    const linha = check.closest('.tarefa');
+    return {
+      naTela: linha.isConnected,
+      classes: [...linha.classList],
+      marcado: check.getAttribute('aria-checked'),
+      salvaComoFeita: JSON.parse(localStorage.getItem(chave)).tarefas[0].feita,
+    };
+  }, CHAVE);
+  assert.deepEqual(logoDepois, {
+    naTela: true,
+    classes: ['tarefa', 'concluindo'],
+    marcado: 'true',
+    salvaComoFeita: true,
+  });
+
+  // Depois da animação a lista é redesenhada e a tarefa passa para as concluídas.
+  await visivel(pagina.getByText('0 pendentes', { exact: true }));
+  await visivel(botao(pagina, 'Concluídas (1)'));
+  assert.equal(await pagina.locator('.tarefa.concluindo').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
+// ----------------------------------------------------------------- lembretes
+
+test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; concluir cancela', async (t) => {
+  const { pagina, erros } = await abrir(t, { preparar: comLembretes('prompt') });
+  const pendentes = (n) =>
+    pagina.waitForFunction((esperado) => window.sistemaDeLembretes.pendentes.length === esperado, n, ESPERA);
+
+  await botao(pagina, 'Tarefas').click();
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Reunião');
+  await botao(pagina, 'Amanhã').click();
+  await pagina.locator('dialog[open] input[type=time]').fill('14:30');
+  await botao(pagina, 'Salvar').click();
+  await pendentes(1);
+
+  const sistema = await pagina.evaluate(() => window.sistemaDeLembretes);
+  assert.equal(sistema.pedidos, 1);
+  const [aviso] = sistema.pendentes;
+  assert.equal(aviso.title, 'Reunião');
+  assert.equal(aviso.body, 'Minhas tarefas');
+  assert.equal(aviso.isExactNotification, false); // nunca abre a tela de "Alarmes e lembretes"
+  assert.equal(aviso.schedule.allowWhileIdle, true);
+  assert.ok(Number.isInteger(aviso.id) && aviso.id > 0);
+  const quando = await pagina.evaluate((iso) => {
+    const data = new Date(iso);
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+    return [data.getHours(), data.getMinutes(), data.getDate() === amanha.getDate()];
+  }, aviso.schedule.at);
+  assert.deepEqual(quando, [14, 30, true]);
+
+  // Tarefa sem data não avisa, e a permissão não é pedida de novo.
+  await botao(pagina, 'Nova tarefa').click();
+  await pagina.getByLabel('Título').fill('Sem data');
+  await botao(pagina, 'Salvar').click();
+  await visivel(pagina.getByText('2 pendentes', { exact: true }));
+
+  await pagina.getByRole('checkbox', { name: 'Concluir: Reunião' }).click();
+  await pendentes(0);
+  assert.equal(await pagina.evaluate(() => window.sistemaDeLembretes.pedidos), 1);
+  assert.deepEqual(erros, []);
+});
+
+test('lembretes: só com data avisa às 9h, e desligar em Ajustes cancela tudo', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 4,
+    aba: 'tarefas',
+    listas: [{ id: 'l', nome: 'Faculdade' }],
+    tarefas: [
+      {
+        id: 't',
+        listaId: 'l',
+        titulo: 'Prova',
+        notas: 'Levar o certificado',
+        prazo: '2099-01-01',
+        hora: null,
+        estrela: false,
+        feita: false,
+        criadaEm: 1,
+        feitaEm: null,
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo, preparar: comLembretes('granted') });
+  const pendentes = (n) =>
+    pagina.waitForFunction((esperado) => window.sistemaDeLembretes.pendentes.length === esperado, n, ESPERA);
+
+  await pendentes(1);
+  const [aviso] = await pagina.evaluate(() => window.sistemaDeLembretes.pendentes);
+  assert.equal(aviso.body, 'Faculdade · Levar o certificado');
+  assert.deepEqual(
+    await pagina.evaluate((iso) => [new Date(iso).getHours(), new Date(iso).getMinutes()], aviso.schedule.at),
+    [9, 0],
+  );
+
+  await botao(pagina, 'Ajustes').click();
+  await visivel(pagina.getByText('Tarefa com horário avisa na hora; só com data, às 9h.'));
+  await pagina.getByRole('switch', { name: 'Lembretes ligados' }).click();
+  await visivel(pagina.getByRole('switch', { name: 'Lembretes desligados' }));
+  await visivel(pagina.getByText('Nenhuma tarefa avisa.'));
+  await pendentes(0);
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).lembretes, false);
+
+  // Ligar de novo agenda outra vez.
+  await pagina.getByRole('switch', { name: 'Lembretes desligados' }).click();
+  await pendentes(1);
+  assert.deepEqual(erros, []);
+});
+
+test('lembretes: com a notificação bloqueada nada é agendado nem pedido; no navegador a seção explica', async (t) => {
+  const tarefa = { id: 't', listaId: 'l', titulo: 'Prova', prazo: '2099-01-01', criadaEm: 1 };
+  const salvo = JSON.stringify({ versao: 4, listas: [{ id: 'l', nome: 'Faculdade' }], tarefas: [tarefa] });
+
+  const bloqueado = await abrir(t, { salvo, preparar: comLembretes('denied') });
+  await botao(bloqueado.pagina, 'Ajustes').click();
+  await visivel(
+    bloqueado.pagina.getByText('As notificações do Foco estão bloqueadas nas configurações do Android.'),
+  );
+  await bloqueado.pagina.waitForTimeout(2000); // mais que a espera da sincronização
+  assert.deepEqual(await bloqueado.pagina.evaluate(() => window.sistemaDeLembretes), {
+    permissao: 'denied',
+    pedidos: 0,
+    pendentes: [],
+  });
+
+  const semPlugin = await abrir(t, { salvo });
+  await botao(semPlugin.pagina, 'Ajustes').click();
+  await visivel(semPlugin.pagina.getByText('Os lembretes das tarefas funcionam no app Android.'));
+  assert.deepEqual([...bloqueado.erros, ...semPlugin.erros], []);
+});
+
 // ---------------------------------------------------------------------- tema
 
 test('tema: começa escuro mesmo com o sistema em claro, e a escolha persiste', async (t) => {
@@ -232,7 +1074,7 @@ test('tema: começa escuro mesmo com o sistema em claro, e a escolha persiste', 
   await pagina.getByRole('radio', { name: 'Claro' }).click();
   await esperarTema(pagina, 'claro');
 
-  await pagina.reload();
+  await recarregar(pagina);
   await visivel(botao(pagina, 'Rotinas'));
   assert.equal(await tema(pagina), 'claro');
 
@@ -359,7 +1201,7 @@ test('backup: os dados copiados em um aparelho são restaurados em outro', async
   await visivel(botao(destino.pagina, 'Leitura, hoje: feito')); // abriu na aba que estava no backup
   assert.equal(await destino.pagina.locator('dialog').count(), 0);
 
-  await destino.pagina.reload();
+  await recarregar(destino.pagina);
   await visivel(botao(destino.pagina, 'Leitura, hoje: feito'));
   assert.deepEqual([...origem.erros, ...destino.erros], []);
 });
@@ -500,6 +1342,63 @@ test('fechar uma folha e abrir outra em seguida não tira o app do lugar', async
   await voltar(pagina);
   await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
   assert.equal(await noApp(), true);
+  assert.deepEqual(erros, []);
+});
+
+// --------------------------------------------------------------------- gestos
+
+test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => {
+  const { pagina, erros } = await abrir(t, { toque: true });
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+
+  // Dedo para a esquerda: vai para a aba da direita.
+  await deslizar(pagina, [400, 500], [120, 510]);
+  await esperarTitulo(pagina, 'Hábitos - Foco');
+  await deslizar(pagina, [400, 500], [120, 510]);
+  await esperarTitulo(pagina, 'Tarefas - Foco');
+
+  // Na última aba não há para onde avançar.
+  await deslizar(pagina, [400, 500], [120, 510]);
+  await visivel(pagina.getByText('Nenhuma tarefa aqui'));
+  assert.equal(await pagina.title(), 'Tarefas - Foco');
+
+  // Dedo para a direita: volta. A aba em que a pessoa parou fica salva.
+  await deslizar(pagina, [120, 500], [400, 490]);
+  await esperarTitulo(pagina, 'Hábitos - Foco');
+  assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).aba, 'habitos');
+  assert.equal(await botao(pagina, 'Hábitos').getAttribute('aria-current'), 'page');
+
+  // Rolar a lista (movimento vertical) e um toque curto não trocam de aba.
+  await deslizar(pagina, [250, 700], [270, 300]);
+  await deslizar(pagina, [250, 500], [280, 500]);
+  await visivel(pagina.getByText('Nenhum hábito ainda'));
+  assert.equal(await pagina.title(), 'Hábitos - Foco');
+  assert.deepEqual(erros, []);
+});
+
+test('deslizar sobre a faixa de rotinas rola a faixa e não troca de aba', async (t) => {
+  const nomes = ['Home office', 'Presencial', 'Fim de semana', 'Viagem', 'Férias', 'Plantão'];
+  const salvo = JSON.stringify({
+    versao: 2,
+    rotinas: nomes.map((nome, i) => ({
+      id: `r${i}`,
+      nome,
+      itens: [{ id: `i${i}`, tipo: 'item', texto: 'Acordar', hora: null }],
+    })),
+  });
+  const { pagina, erros } = await abrir(t, { salvo, toque: true });
+
+  const faixa = pagina.locator('.faixa');
+  await visivel(faixa);
+  const caixa = await faixa.boundingBox();
+  const y = caixa.y + caixa.height / 2;
+  await deslizar(pagina, [400, y], [120, y]);
+  await pagina.waitForFunction(() => document.querySelector('.faixa').scrollLeft > 0, null, ESPERA);
+  assert.equal(await pagina.title(), 'Rotinas - Foco');
+
+  // O mesmo gesto fora da faixa troca de aba.
+  await deslizar(pagina, [400, 600], [120, 600]);
+  await esperarTitulo(pagina, 'Hábitos - Foco');
   assert.deepEqual(erros, []);
 });
 

@@ -4,25 +4,112 @@
 import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
 import { hoje, somaDias } from './nucleo/datas.js';
-import { LIMITES, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
-import { agrupar, rotuloData } from './nucleo/prazos.js';
-import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar } from './ui.js';
+import { LIMITES, ORDENS_TAREFAS, VISAO_ESTRELA as ESTRELA } from './nucleo/esquema.js';
+import { agrupar, ordenar, rotuloData } from './nucleo/prazos.js';
+import { MAXIMO_DE_INTERVALOS, descrever, proximaData } from './nucleo/repeticao.js';
+import { pedirPermissaoSeFaltar } from './lembretes.js';
+import { h, icone, abrirFolha, abrirMenu, confirmar, campo, estadoVazio, redesenhar, vibrar } from './ui.js';
 
 let concluidasAbertas = false;
 
+// Tempo da resposta ao concluir: a marca aparece, a linha se recolhe e só então a lista é redesenhada.
+const MOSTRAR_MARCA_MS = 380;
+const RECOLHER_MS = 240;
+let esperaRedesenho = null;
+
 // ---------------------------------------------------------------- ações
 
-function alternarFeita(tarefa) {
+// Tarefa que se repete: ao concluir, nasce a próxima ocorrência, e a série segue nela.
+// A concluída fica no histórico sem a repetição, para reabrir não criar outra série.
+function criarProximaOcorrencia(tarefa) {
+  estado.tarefas.push({
+    ...tarefa,
+    id: uid(),
+    prazo: proximaData(tarefa.prazo, tarefa.repeticao, hoje()),
+    feita: false,
+    feitaEm: null,
+    criadaEm: Date.now(),
+  });
+  tarefa.repeticao = null;
+}
+
+function alternarFeita(tarefa, check) {
   tarefa.feita = !tarefa.feita;
   tarefa.feitaEm = tarefa.feita ? Date.now() : null;
+  if (tarefa.feita && tarefa.repeticao) criarProximaOcorrencia(tarefa);
   salvar();
-  redesenhar();
+
+  const linhaNaTela = check.closest('.tarefa');
+  if (!tarefa.feita) {
+    redesenhar(); // reabrir é imediato
+    return;
+  }
+
+  // Concluir: a tarefa já está salva como feita. A linha fica um instante na tela,
+  // com a marca e o título riscado, e se recolhe; antes ela simplesmente sumia.
+  vibrar('concluido');
+  check.replaceChildren(icone('check'));
+  check.setAttribute('aria-checked', 'true');
+  linhaNaTela.style.setProperty('height', `${linhaNaTela.offsetHeight}px`);
+  linhaNaTela.classList.add('concluindo');
+  setTimeout(() => linhaNaTela.classList.add('saindo'), MOSTRAR_MARCA_MS);
+
+  // Um só redesenho, depois da última conclusão: tocar em várias seguidas não corta a animação.
+  clearTimeout(esperaRedesenho);
+  esperaRedesenho = setTimeout(redesenhar, MOSTRAR_MARCA_MS + RECOLHER_MS);
 }
 
 function alternarEstrela(tarefa) {
   tarefa.estrela = !tarefa.estrela;
   salvar();
   redesenhar();
+}
+
+// Campos de repetição do formulário da tarefa: a unidade ("Não repete", dias, semanas...)
+// e de quantas em quantas. O segundo só aparece quando a tarefa repete.
+function camposDeRepeticao(tarefa) {
+  const unidade = h(
+    'select',
+    { class: 'entrada' },
+    [
+      ['', 'Não repete'],
+      ['dia', 'Dias'],
+      ['semana', 'Semanas'],
+      ['mes', 'Meses'],
+      ['ano', 'Anos'],
+    ].map(([valor, rotulo]) => h('option', { value: valor }, rotulo)),
+  );
+  unidade.value = tarefa?.repeticao?.unidade ?? '';
+  const cada = h('input', {
+    class: 'entrada',
+    type: 'number',
+    inputMode: 'numeric',
+    min: 1,
+    max: MAXIMO_DE_INTERVALOS,
+    value: String(tarefa?.repeticao?.cada ?? 1),
+  });
+  const campoCada = campo('A cada', cada);
+  const mostrarCada = () => {
+    campoCada.hidden = !unidade.value;
+  };
+  unidade.addEventListener('change', mostrarCada);
+  mostrarCada();
+
+  return {
+    campoUnidade: campo('Repetir', unidade),
+    campoCada,
+    limpar() {
+      unidade.value = '';
+      mostrarCada();
+    },
+    // Devolve { cada, unidade } ou null. Número fora da faixa é trazido para dentro dela.
+    ler() {
+      if (!unidade.value) return null;
+      const n = Number.parseInt(cada.value, 10);
+      const vezes = Math.min(Math.max(Number.isInteger(n) ? n : 1, 1), MAXIMO_DE_INTERVALOS);
+      return { cada: vezes, unidade: unidade.value };
+    },
+  };
 }
 
 function editarTarefa(tarefa) {
@@ -46,6 +133,9 @@ function editarTarefa(tarefa) {
     maxLength: LIMITES.notasTarefa,
   });
   const prazo = h('input', { class: 'entrada', type: 'date', value: tarefa?.prazo ?? '' });
+  const hora = h('input', { class: 'entrada', type: 'time', value: tarefa?.hora ?? '' });
+
+  const repetir = camposDeRepeticao(tarefa);
   const lista = h(
     'select',
     { class: 'entrada' },
@@ -61,6 +151,11 @@ function editarTarefa(tarefa) {
         class: 'chip',
         onclick: () => {
           prazo.value = valor;
+          if (!valor) {
+            // sem data não há horário nem repetição
+            hora.value = '';
+            repetir.limpar();
+          }
         },
       },
       rotulo,
@@ -75,10 +170,14 @@ function editarTarefa(tarefa) {
       return;
     }
 
+    const repeticao = repetir.ler();
     const dados = {
       titulo: tituloFinal,
       notas: notas.value.trim(),
-      prazo: prazo.value || null,
+      // Horário ou repetição sem data valem a partir de hoje, como no Google Tasks.
+      prazo: prazo.value || (hora.value || repeticao ? hoje() : null),
+      hora: hora.value || null,
+      repeticao,
       // Sem opção selecionada (lista da tarefa não existe mais), cai na primeira lista.
       listaId: lista.value || estado.listas[0].id,
     };
@@ -97,6 +196,8 @@ function editarTarefa(tarefa) {
     salvar();
     fechar();
     redesenhar();
+    // Tarefa com data pode avisar: é a hora de pedir a permissão, se ainda não foi pedida.
+    if (dados.prazo) pedirPermissaoSeFaltar();
   };
 
   const excluir = async () => {
@@ -114,7 +215,7 @@ function editarTarefa(tarefa) {
       { class: 'folha-form', onsubmit: aoSalvar },
       campo('Título', titulo),
       campo('Detalhes', notas),
-      campo('Prazo', prazo),
+      h('div', { class: 'dupla' }, campo('Prazo', prazo), campo('Horário', hora)),
       h(
         'div',
         { class: 'atalhos' },
@@ -122,6 +223,7 @@ function editarTarefa(tarefa) {
         atalho('Amanhã', somaDias(hoje(), 1)),
         atalho('Sem data', ''),
       ),
+      h('div', { class: 'dupla' }, repetir.campoUnidade, repetir.campoCada),
       estado.listas.length > 1 ? campo('Lista', lista) : null,
       h(
         'div',
@@ -198,9 +300,68 @@ async function excluirLista(lista) {
   redesenhar();
 }
 
+// Ordem das tarefas pendentes. Vale para todas as listas e para a visão "com estrela".
+const ROTULO_DA_ORDEM = {
+  data: 'Data',
+  estrela: 'Com estrela primeiro',
+  titulo: 'Título',
+  criacao: 'Mais recentes primeiro',
+};
+
+function escolherOrdem() {
+  abrirMenu(
+    'Ordenar por',
+    ORDENS_TAREFAS.map((ordem) => ({
+      rotulo: ROTULO_DA_ORDEM[ordem],
+      atual: estado.ordemTarefas === ordem,
+      acao: () => {
+        estado.ordemTarefas = ordem;
+        salvar();
+        redesenhar();
+      },
+    })),
+  );
+}
+
+async function excluirConcluidas(lista) {
+  const daLista = (t) => t.listaId === lista.id && t.feita;
+  const quantas = estado.tarefas.filter(daLista).length;
+  const quais = quantas === 1 ? 'a tarefa concluída' : `as ${quantas} tarefas concluídas`;
+  if (!(await confirmar(`Excluir ${quais} da lista "${lista.nome}"?`))) return;
+
+  estado.tarefas = estado.tarefas.filter((t) => !daLista(t));
+  salvar();
+  redesenhar();
+}
+
+// A ordem das listas na faixa do topo é a ordem em que estão guardadas.
+function moverLista(lista, passo) {
+  const de = estado.listas.indexOf(lista);
+  const para = de + passo;
+  if (de < 0 || para < 0 || para >= estado.listas.length) return;
+  estado.listas.splice(de, 1);
+  estado.listas.splice(para, 0, lista);
+  salvar();
+  redesenhar();
+}
+
 function menuLista(lista) {
+  const posicao = estado.listas.indexOf(lista);
   abrirMenu(lista.nome, [
+    { rotulo: `Ordenar por: ${ROTULO_DA_ORDEM[estado.ordemTarefas]}`, acao: escolherOrdem },
     { rotulo: 'Renomear lista', acao: () => editarLista(lista) },
+    { rotulo: 'Mover para a esquerda', desativado: posicao === 0, acao: () => moverLista(lista, -1) },
+    {
+      rotulo: 'Mover para a direita',
+      desativado: posicao === estado.listas.length - 1,
+      acao: () => moverLista(lista, 1),
+    },
+    {
+      rotulo: 'Excluir concluídas',
+      perigo: true,
+      desativado: !estado.tarefas.some((t) => t.listaId === lista.id && t.feita),
+      acao: () => excluirConcluidas(lista),
+    },
     {
       rotulo: 'Excluir lista',
       perigo: true,
@@ -212,15 +373,19 @@ function menuLista(lista) {
 
 // --------------------------------------------------------------- desenho
 
-function linha(tarefa, { atrasada = false, mostrarLista = false } = {}) {
+// comPrazo: mostra a data na linha. Na ordem por data não precisa, porque o grupo já diz o dia.
+function linha(tarefa, { atrasada = false, mostrarLista = false, comPrazo = false } = {}) {
   const detalhes = [];
-  if (atrasada || tarefa.feita) {
-    if (tarefa.prazo) {
-      detalhes.push(
-        h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, rotuloData(tarefa.prazo, hoje())),
-      );
-    }
-  }
+  // Data e horário em uma linha só: "sex., 13 de nov., 14:30", só "14:30" quando o grupo já diz o dia.
+  const mostrarData = Boolean(tarefa.prazo) && (atrasada || tarefa.feita || comPrazo);
+  const quando = [
+    mostrarData ? rotuloData(tarefa.prazo, hoje()) : null,
+    tarefa.hora,
+    tarefa.repeticao ? `repete ${descrever(tarefa.repeticao)}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  if (quando) detalhes.push(h('span', { class: `tarefa-sub${atrasada ? ' atrasada' : ''}` }, quando));
   if (mostrarLista) {
     const nomeLista = estado.listas.find((l) => l.id === tarefa.listaId)?.nome;
     if (nomeLista) detalhes.push(h('span', { class: 'tarefa-sub' }, nomeLista));
@@ -239,7 +404,7 @@ function linha(tarefa, { atrasada = false, mostrarLista = false } = {}) {
         role: 'checkbox',
         'aria-checked': String(tarefa.feita),
         'aria-label': `${tarefa.feita ? 'Reabrir' : 'Concluir'}: ${tarefa.titulo}`,
-        onclick: () => alternarFeita(tarefa),
+        onclick: (e) => alternarFeita(tarefa, e.currentTarget),
       },
       tarefa.feita ? icone('check') : h('span', { class: 'circulo' }),
     ),
@@ -261,6 +426,44 @@ function linha(tarefa, { atrasada = false, mostrarLista = false } = {}) {
       icone('estrela', { cheio: tarefa.estrela, tam: 22 }),
     ),
   );
+}
+
+// Pendentes na ordem escolhida. Por data: um cartão por grupo (Atrasadas, Hoje, Amanhã,
+// cada data, Sem data). Nas outras ordens: um cartão só, com a data em cada linha.
+function cartoesDasPendentes(pendentes, naEstrela) {
+  const diaHoje = hoje();
+  if (estado.ordemTarefas === 'data') {
+    return agrupar(pendentes, diaHoje).map((g) =>
+      h(
+        'section',
+        { class: `cartao grupo${g.atrasado ? ' atrasado' : ''}${g.chave === 'hoje' ? ' hoje' : ''}` },
+        h('h3', { class: 'grupo-titulo' }, g.rotulo),
+        h(
+          'ul',
+          {},
+          g.tarefas.map((t) => linha(t, { atrasada: g.atrasado, mostrarLista: naEstrela })),
+        ),
+      ),
+    );
+  }
+  if (!pendentes.length) return [];
+  return [
+    h(
+      'section',
+      { class: 'cartao' },
+      h(
+        'ul',
+        {},
+        ordenar(pendentes, estado.ordemTarefas).map((t) =>
+          linha(t, {
+            atrasada: Boolean(t.prazo) && t.prazo < diaHoje,
+            mostrarLista: naEstrela,
+            comPrazo: true,
+          }),
+        ),
+      ),
+    ),
+  ];
 }
 
 function render(raiz) {
@@ -311,18 +514,7 @@ function render(raiz) {
     ),
   );
 
-  const blocos = agrupar(pendentes, hoje()).map((g) =>
-    h(
-      'section',
-      { class: `cartao grupo${g.atrasado ? ' atrasado' : ''}` },
-      h('h3', { class: 'grupo-titulo' }, g.rotulo),
-      h(
-        'ul',
-        {},
-        g.tarefas.map((t) => linha(t, { atrasada: g.atrasado, mostrarLista: naEstrela })),
-      ),
-    ),
-  );
+  const blocos = cartoesDasPendentes(pendentes, naEstrela);
 
   if (!pendentes.length) {
     blocos.push(
@@ -331,6 +523,7 @@ function render(raiz) {
         : estadoVazio(
             concluidas.length ? 'Tudo concluído' : 'Nenhuma tarefa aqui',
             'Toque em + para adicionar uma tarefa.',
+            { compacto: concluidas.length > 0 },
           ),
     );
   }
@@ -376,22 +569,22 @@ function render(raiz) {
         h('h2', {}, naEstrela ? 'Com estrela' : ativa.nome),
         h('p', { class: 'sub' }, pendentes.length === 1 ? '1 pendente' : `${pendentes.length} pendentes`),
       ),
-      naEstrela
-        ? null
-        : h(
-            'button',
-            {
-              type: 'button',
-              class: 'botao-icone',
-              'aria-label': 'Opções da lista',
-              onclick: () => menuLista(ativa),
-            },
-            icone('pontos'),
-          ),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'botao-icone',
+          'aria-label': naEstrela ? 'Ordenar por' : 'Opções da lista',
+          onclick: () => (naEstrela ? escolherOrdem() : menuLista(ativa)),
+        },
+        icone('pontos'),
+      ),
     ),
     ...blocos,
   );
   faixa.scrollLeft = rolagemFaixa;
+  // A lista ativa fica sempre à vista na faixa (ela pode ter mudado de lugar).
+  faixa.querySelector('.chip.ativo')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 export const tarefas = {

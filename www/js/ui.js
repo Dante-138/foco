@@ -55,6 +55,15 @@ const ICONES = {
   estrela: [['path', { d: 'M12 3.8l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.8l-5.1 2.7 1-5.7-4.1-4 5.7-.8z' }]],
   cima: [['path', { d: 'M6 14.5l6-6 6 6' }]],
   baixo: [['path', { d: 'M6 9.5l6 6 6-6' }]],
+  filtro: [['path', { d: 'M4 7h16M7 12h10M10 17h4' }]],
+  elo: [
+    ['path', { d: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1' }],
+    ['path', { d: 'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1' }],
+  ],
+  desfazer: [
+    ['path', { d: 'M9 6.5l-5 5 5 5' }],
+    ['path', { d: 'M4 11.5h10a4.5 4.5 0 0 1 0 9h-3' }],
+  ],
   ajustes: [
     ['path', { d: 'M4 7h8M18 7h2M4 17h2M12 17h8' }],
     ['circle', { cx: 15, cy: 7, r: 2.5 }],
@@ -221,6 +230,9 @@ export function abrirFolha({ titulo, corpo, fecharNoFundo = true, aoFechar, aoTe
   return fechar;
 }
 
+// Cada opção: { rotulo, acao, perigo, desativado } e, para as que ficam marcadas:
+//   marcado (verdadeiro ou falso): liga e desliga, como um interruptor;
+//   atual (verdadeiro ou falso): a escolhida entre várias.
 export function abrirMenu(titulo, opcoes) {
   const fechar = abrirFolha({
     titulo,
@@ -233,13 +245,17 @@ export function abrirMenu(titulo, opcoes) {
           {
             type: 'button',
             class: `menu-item${o.perigo ? ' perigo' : ''}`,
+            role: o.marcado == null ? null : 'switch',
+            'aria-checked': o.marcado == null ? null : String(o.marcado),
+            'aria-current': o.atual ? 'true' : null,
             disabled: Boolean(o.desativado),
             onclick: () => {
               fechar();
               o.acao();
             },
           },
-          o.rotulo,
+          h('span', {}, o.rotulo),
+          o.marcado || o.atual ? icone('check', { tam: 20 }) : null,
         ),
       ),
     ),
@@ -279,10 +295,12 @@ export function campo(rotulo, entrada) {
   return h('label', { class: 'rotulo' }, rotulo, entrada);
 }
 
-export function estadoVazio(titulo, dica) {
+// compacto: quando há mais conteúdo logo abaixo (a seção de concluídas), a mensagem
+// ocupa só o espaço dela em vez de ficar no meio da tela.
+export function estadoVazio(titulo, dica, { compacto = false } = {}) {
   return h(
     'div',
-    { class: 'sem-conteudo' },
+    { class: `sem-conteudo${compacto ? ' compacto' : ''}` },
     h('p', { class: 'sem-conteudo-titulo' }, titulo),
     h('p', {}, dica),
   );
@@ -292,4 +310,17 @@ export function avisar(texto) {
   const el = h('div', { class: 'aviso', role: 'status' }, texto);
   document.body.append(el);
   setTimeout(() => el.remove(), 4000);
+}
+
+// Resposta tátil: um toque curto ao marcar, dois pulsos ao concluir.
+// Só vibra onde o aparelho tem motor e o app tem permissão (no Android, VIBRATE);
+// nos outros lugares a chamada não faz nada.
+const VIBRACAO = { toque: 8, concluido: [12, 70, 22] };
+
+export function vibrar(tipo) {
+  try {
+    navigator.vibrate?.(VIBRACAO[tipo]);
+  } catch {
+    /* sem vibração neste aparelho */
+  }
 }
