@@ -100,7 +100,8 @@ Nada entra na `main` sem pull request, e o merge só é liberado com o job `Gate
 A regra vale também para o dono do repositório. O portão confere, nesta ordem:
 
 1. **Mensagens de commit e título do PR** no padrão Conventional Commits, com até 72 caracteres
-   e sem linha de coautoria.
+   e sem linha de coautoria. O job `Título` repete a conferência do título e da descrição
+   quando o PR é editado: no merge por squash, são eles que viram o commit na `main`.
 2. **Lint sem nenhum aviso**, e sem comentário de exceção: o `eslint-disable` é proibido.
    Além dos erros comuns, o lint impõe a estrutura descrita abaixo.
 3. **Formatação** conferida pelo Prettier.

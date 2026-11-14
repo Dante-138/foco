@@ -46,7 +46,16 @@ function rodar(pasta, ...argumentos) {
   const { status, stdout, stderr } = spawnSync(process.execPath, [SCRIPT, ...argumentos], {
     cwd: pasta,
     encoding: 'utf8',
-    env: { ...process.env, TITULO_PR: '' },
+    env: { ...process.env, TITULO_PR: '', CORPO_PR: '' },
+  });
+  return { status, stdout, stderr };
+}
+
+// Modo --pr: não precisa de repositório, só do título e da descrição no ambiente.
+function rodarPr(titulo, corpo = '') {
+  const { status, stdout, stderr } = spawnSync(process.execPath, [SCRIPT, '--pr'], {
+    encoding: 'utf8',
+    env: { ...process.env, TITULO_PR: titulo, CORPO_PR: corpo },
   });
   return { status, stdout, stderr };
 }
@@ -133,4 +142,26 @@ test('sem argumento: saída 2 e a linha de uso', (t) => {
   const { status, stderr } = rodar(pasta);
   assert.equal(status, 2);
   assert.match(stderr, /^Uso: node tools\/verificar-commits\.mjs <base> \[<ponta>\]/);
+});
+
+test('modo --pr: título no padrão e descrição comum passam', () => {
+  const { status, stdout } = rodarPr('feat: add tabs', 'O que entra\n\n- abas novas');
+  assert.equal(status, 0);
+  assert.match(stdout, /^1 mensagem\(ns\) conferida\(s\), 0 reprovada\(s\)\.$/m);
+});
+
+test('modo --pr: título fora do padrão ou descrição com coautoria reprovam', () => {
+  const titulo = rodarPr('Add tabs');
+  assert.equal(titulo.status, 1);
+  assert.match(titulo.stderr, /^REPROVADO {2}título do PR: Add tabs$/m);
+
+  const corpo = rodarPr('feat: add tabs', 'Texto.\n\nCo-Authored-By: Alguém <a@b.c>');
+  assert.equal(corpo.status, 1);
+  assert.match(corpo.stderr, /coautoria/);
+});
+
+test('modo --pr: sem título, saída 2', () => {
+  const { status, stderr } = rodarPr('   ');
+  assert.equal(status, 2);
+  assert.match(stderr, /TITULO_PR está vazia/);
 });

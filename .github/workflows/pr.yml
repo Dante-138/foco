@@ -30,3 +30,24 @@ jobs:
             exit 1
           fi
           echo "Base: main."
+
+  # Com o merge por squash, o título do PR vira o assunto do commit na main e a descrição vira o
+  # corpo. O job Gate confere o título quando chega commit; este confere os dois também quando
+  # são editados depois, que é quando o Gate não roda.
+  titulo:
+    name: Título
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # O script não tem dependências: roda com o Node que já vem na máquina do Actions.
+      - name: Título e descrição do PR
+        env:
+          TITULO_PR: ${{ github.event.pull_request.title }}
+          CORPO_PR: ${{ github.event.pull_request.body }}
+        run: node tools/verificar-commits.mjs --pr
