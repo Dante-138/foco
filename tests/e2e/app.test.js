@@ -213,6 +213,133 @@ test('rotina: sair da edição com texto alterado pede confirmação', async (t)
   assert.deepEqual(erros, []);
 });
 
+test('rotina: editar na própria lista mantém a marca e a ligação; Enter cria item e o + adiciona no fim', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 5,
+    habitos: [{ id: 'cama', nome: 'Arrumar a cama', cor: 'azul', tipo: 'simnao' }],
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          { id: 's1', tipo: 'secao', texto: 'ACORDAR', hora: null, habitoId: null },
+          { id: 'i1', tipo: 'item', texto: 'Levantar', hora: '06:30', habitoId: null },
+          { id: 'i2', tipo: 'item', texto: 'Arrumar a cama', hora: null, habitoId: 'cama' },
+        ],
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const textos = () => pagina.locator('.edicao .campo-texto').evaluateAll((els) => els.map((e) => e.value));
+  const salvos = async () => JSON.parse(await lerSalvo(pagina, CHAVE));
+
+  // Marca o item ligado: o hábito fica feito.
+  await pagina.getByRole('checkbox', { name: /Arrumar a cama/ }).click();
+  await visivel(pagina.getByText('1 de 2 hoje'));
+
+  // Edição na lista: cada linha vira um campo; trocar o texto não perde a marca nem a ligação.
+  await botao(pagina, 'Editar itens').click();
+  assert.deepEqual(await textos(), ['ACORDAR', 'Levantar', 'Arrumar a cama']);
+  assert.equal(await botao(pagina, 'Desfazer a última marca').isVisible(), false);
+  const cama = pagina.locator('.edicao .campo-texto').nth(2);
+  await cama.fill('Arrumar a cama e o quarto');
+
+  // Enter cria um item logo abaixo, já com o foco; o horário se edita no campo da linha.
+  await cama.press('Enter');
+  await pagina.keyboard.type('Abrir a janela');
+  await pagina.locator('.edicao .campo-hora').first().fill('06:45');
+
+  // Nova seção e um item nela; uma linha vazia some com o apagar.
+  await botao(pagina, 'Nova seção').click();
+  await pagina.keyboard.type('SAIR');
+  await pagina.keyboard.press('Enter');
+  await pagina.keyboard.type('Pegar a chave');
+  await pagina.keyboard.press('Enter');
+  await pagina.keyboard.press('Backspace');
+  assert.deepEqual(await textos(), [
+    'ACORDAR',
+    'Levantar',
+    'Arrumar a cama e o quarto',
+    'Abrir a janela',
+    'SAIR',
+    'Pegar a chave',
+  ]);
+
+  await botao(pagina, 'Concluir edição').click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  const rotina = (await salvos()).rotinas[0];
+  assert.deepEqual(
+    rotina.itens.map((i) => [i.tipo, i.texto, i.hora, i.habitoId]),
+    [
+      ['secao', 'ACORDAR', null, null],
+      ['item', 'Levantar', '06:45', null],
+      ['item', 'Arrumar a cama e o quarto', null, 'cama'],
+      ['item', 'Abrir a janela', null, null],
+      ['secao', 'SAIR', null, null],
+      ['item', 'Pegar a chave', null, null],
+    ],
+  );
+  assert.equal(rotina.itens[2].id, 'i2'); // mesmo id: a marca do dia continua
+  assert.equal(
+    await pagina.getByRole('checkbox', { name: /Arrumar a cama e o quarto/ }).getAttribute('aria-checked'),
+    'true',
+  );
+
+  // O + da aba adiciona um item no fim da rotina; deixado em branco, ele não fica.
+  await botao(pagina, 'Novo item').click();
+  await pagina.keyboard.type('Trancar a porta');
+  await botao(pagina, 'Novo item').click();
+  await botao(pagina, 'Concluir edição').click();
+  await visivel(pagina.getByText('1 de 5 hoje'));
+  assert.equal((await salvos()).rotinas[0].itens.at(-1).texto, 'Trancar a porta');
+
+  // Desfazer e refazer na edição: tirar uma linha e trazer de volta.
+  await botao(pagina, 'Editar itens').click();
+  await pagina.locator('.edicao-item').nth(3).getByRole('button', { name: 'Excluir item' }).click();
+  assert.equal((await textos()).includes('Pegar a chave'), false);
+  await botao(pagina, 'Desfazer edição').click();
+  assert.equal((await textos()).includes('Pegar a chave'), true);
+  await botao(pagina, 'Refazer edição').click();
+  assert.equal((await textos()).includes('Pegar a chave'), false);
+  await botao(pagina, 'Desfazer edição').click();
+
+  // Excluir um item marcado tira a marca dele, mas o hábito ligado continua feito.
+  await pagina.locator('.edicao-item').nth(1).getByRole('button', { name: 'Excluir item' }).click();
+  await botao(pagina, 'Concluir edição').click();
+  await visivel(pagina.getByText('0 de 4 hoje'));
+  assert.deepEqual(Object.values((await salvos()).registros.cama), ['feito']);
+  assert.deepEqual(erros, []);
+});
+
+test('rotina: o que foi digitado na edição é gravado na hora em que o app vai para o fundo', async (t) => {
+  const salvo = JSON.stringify({
+    versao: 5,
+    rotinas: [{ id: 'r', nome: 'Manhã', itens: [{ id: 'i1', tipo: 'item', texto: 'Levantar' }] }],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  await botao(pagina, 'Editar itens').click();
+  const campo = pagina.locator('.edicao .campo-texto').first();
+
+  // App para o fundo (a aba deixa de ser visível): grava antes da espera de meio segundo.
+  await campo.fill('Levantar cedo');
+  const aoEsconder = await pagina.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    delete document.hidden;
+    return JSON.parse(localStorage.getItem('foco:v1')).rotinas[0].itens[0].texto;
+  });
+  assert.equal(aoEsconder, 'Levantar cedo');
+
+  // Página saindo (pagehide): mesma coisa.
+  await campo.fill('Levantar às 6');
+  const aoSair = await pagina.evaluate(() => {
+    window.dispatchEvent(new Event('pagehide'));
+    return JSON.parse(localStorage.getItem('foco:v1')).rotinas[0].itens[0].texto;
+  });
+  assert.equal(aoSair, 'Levantar às 6');
+  assert.deepEqual(erros, []);
+});
+
 test('rotina ligada a hábito: marcar o item marca o hábito; desfazer e desmarcar tudo desfazem', async (t) => {
   const habito = (id, nome, extra) => ({
     id,
@@ -295,7 +422,7 @@ test('rotina ligada a hábito: marcar o item marca o hábito; desfazer e desmarc
   assert.deepEqual(await registros(), { cama: 'feito', agua: 1 });
 
   await botao(pagina, 'Opções da rotina').click();
-  await botao(pagina, 'Desmarcar tudo').click();
+  await botao(pagina, 'Desmarcar todos').click();
   await visivel(pagina.getByText('0 de 4 hoje'));
   assert.deepEqual(await registros(), {});
   assert.deepEqual(erros, []);
@@ -343,9 +470,9 @@ test('rotina: item marcado vai para a área de marcados, com a seção repetida,
   assert.deepEqual(await secoes('.area-pendentes'), ['ACORDAR', 'SAIR']);
 
   // A área de marcados recolhe e abre.
-  await botao(pagina, 'Marcados (1)').click();
+  await botao(pagina, '1 item marcado').click();
   assert.deepEqual(await itens('.area-marcados'), []);
-  await botao(pagina, 'Marcados (1)').click();
+  await botao(pagina, '1 item marcado').click();
   assert.deepEqual(await itens('.area-marcados'), ['Levantar']);
 
   // Com a opção desligada, os itens ficam onde foram escritos e não há área de marcados.
@@ -360,6 +487,132 @@ test('rotina: item marcado vai para a área de marcados, com a seção repetida,
   ]);
   assert.equal(await pagina.locator('.area-marcados').count(), 0);
   assert.equal(JSON.parse(await lerSalvo(pagina, CHAVE)).marcadosNoFim, false);
+  assert.deepEqual(erros, []);
+});
+
+test('rotina: "Excluir itens marcados" e "Desmarcar todos" no menu, como no Keep', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const textos = (area) => pagina.locator(`${area} .rotina-texto`).allTextContents();
+
+  await criarRotinaDaManha(pagina);
+  await botao(pagina, 'Opções da rotina').click();
+  assert.equal(await botao(pagina, 'Excluir itens marcados').isDisabled(), true); // nada marcado
+  assert.equal(await botao(pagina, 'Desmarcar todos').isDisabled(), true);
+  await pagina.keyboard.press('Escape');
+  await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await pagina.getByRole('checkbox', { name: /Pegar a chave/ }).click();
+  await visivel(botao(pagina, '2 itens marcados'));
+
+  await botao(pagina, 'Opções da rotina').click();
+  await botao(pagina, 'Excluir itens marcados').click();
+  await visivel(pagina.getByText('Excluir 2 itens marcados desta rotina?'));
+  await botao(pagina, 'Excluir').click();
+  await visivel(pagina.getByText('0 de 2 hoje'));
+  assert.deepEqual(await textos('.area-pendentes'), ['Beber água', 'Arrumar a cama']);
+  assert.equal(await pagina.locator('.area-marcados').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
+test('rotina: na edição, a alça arrasta um item para outra seção e uma seção com o bloco inteiro', async (t) => {
+  const item = (id, texto) => ({ id, tipo: 'item', texto, hora: null, habitoId: null });
+  const secao = (id, texto) => ({ id, tipo: 'secao', texto, hora: null, habitoId: null });
+  const salvo = JSON.stringify({
+    versao: 5,
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          secao('s1', 'ACORDAR'),
+          item('i1', 'Levantar'),
+          item('i2', 'Beber água'),
+          secao('s2', 'SAIR'),
+          item('i3', 'Pegar a chave'),
+        ],
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const linha = (id) => pagina.locator(`.edicao li[data-linha="${id}"]`);
+  const centro = async (alvo) => {
+    const caixa = await alvo.boundingBox();
+    return [caixa.x + caixa.width / 2, caixa.y + caixa.height / 2];
+  };
+  // Pega a alça da linha "de" e solta um pouco acima do meio da linha "ate".
+  const arrastar = async (de, ate) => {
+    const [x, y] = await centro(linha(de).locator('.alca'));
+    const caixa = await linha(ate).boundingBox();
+    await pagina.mouse.move(x, y);
+    await pagina.mouse.down();
+    await pagina.mouse.move(x, caixa.y + caixa.height * 0.3, { steps: 12 });
+    await pagina.mouse.up();
+  };
+  const ordem = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).rotinas[0].itens.map((i) => i.texto);
+
+  await botao(pagina, 'Editar itens').click();
+
+  // Item de SAIR para dentro de ACORDAR, antes de "Levantar".
+  await arrastar('i3', 'i1'); // Pegar a chave, para antes de Levantar
+  await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
+  assert.deepEqual(await ordem(), ['ACORDAR', 'Pegar a chave', 'Levantar', 'Beber água', 'SAIR']);
+
+  // Seção SAIR (agora vazia) para cima de ACORDAR: o bloco de ACORDAR vem junto atrás dela.
+  await arrastar('s2', 's1'); // SAIR, para antes de ACORDAR
+  await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
+  assert.deepEqual(await ordem(), ['SAIR', 'ACORDAR', 'Pegar a chave', 'Levantar', 'Beber água']);
+
+  // Desfazer da edição volta o último arraste.
+  await botao(pagina, 'Desfazer edição').click();
+  assert.deepEqual(await ordem(), ['ACORDAR', 'Pegar a chave', 'Levantar', 'Beber água', 'SAIR']);
+
+  await botao(pagina, 'Concluir edição').click();
+  await visivel(pagina.getByText('0 de 3 hoje'));
+  assert.deepEqual(await pagina.locator('.area-pendentes .rotina-texto').allTextContents(), [
+    'Pegar a chave',
+    'Levantar',
+    'Beber água',
+  ]);
+  assert.deepEqual(erros, []);
+});
+
+test('rotina: fazer uma cópia (sem as marcas do dia) e mover a rotina na faixa', async (t) => {
+  const { pagina, erros } = await abrir(t);
+  const nomes = async () => (await pagina.locator('.faixa .chip').allTextContents()).slice(0, -1); // o último é "Nova rotina"
+  const menu = async (rotulo) => {
+    await botao(pagina, 'Opções da rotina').click();
+    await botao(pagina, rotulo).click();
+    await pagina.waitForFunction(() => !document.querySelector('dialog'), null, ESPERA);
+  };
+
+  await criarRotinaDaManha(pagina);
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
+
+  await menu('Fazer uma cópia');
+  await visivel(pagina.getByRole('heading', { name: 'Manhã (cópia)' }));
+  await visivel(pagina.getByText('0 de 4 hoje')); // a cópia nasce sem marcas
+  assert.deepEqual(await nomes(), ['Manhã', 'Manhã (cópia)']);
+  const [original, copia] = JSON.parse(await lerSalvo(pagina, CHAVE)).rotinas;
+  assert.deepEqual(
+    copia.itens.map((i) => [i.tipo, i.texto]),
+    original.itens.map((i) => [i.tipo, i.texto]),
+  );
+  assert.equal(
+    copia.itens.some((i) => original.itens.some((o) => o.id === i.id)),
+    false,
+  );
+
+  await menu('Mover para a esquerda');
+  assert.deepEqual(await nomes(), ['Manhã (cópia)', 'Manhã']);
+  await botao(pagina, 'Opções da rotina').click();
+  assert.equal(await botao(pagina, 'Mover para a esquerda').isDisabled(), true);
+  await pagina.keyboard.press('Escape');
+
+  // A original continua com a marca de hoje.
+  await pagina.locator('.faixa .chip', { hasText: /^Manhã$/ }).click();
+  await visivel(pagina.getByText('1 de 4 hoje'));
   assert.deepEqual(erros, []);
 });
 
@@ -1367,7 +1620,7 @@ test('fechar uma folha e abrir outra em seguida não tira o app do lugar', async
 
   for (let volta = 0; volta < 3; volta += 1) {
     await botao(pagina, 'Opções da rotina').click();
-    await botao(pagina, 'Editar rotina').click(); // fecha o menu e abre a edição
+    await botao(pagina, 'Editar como texto').click(); // fecha o menu e abre a edição
     await visivel(pagina.getByText('Editar rotina', { exact: true }));
     await botao(pagina, 'Salvar').click();
     await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
@@ -1378,7 +1631,7 @@ test('fechar uma folha e abrir outra em seguida não tira o app do lugar', async
 
   // Com tudo fechado não sobra entrada de guarda: o voltar seguinte fecha uma folha nova, e só ela.
   await botao(pagina, 'Opções da rotina').click();
-  await visivel(botao(pagina, 'Editar rotina'));
+  await visivel(botao(pagina, 'Editar como texto'));
   await voltar(pagina);
   await pagina.waitForFunction(() => document.querySelectorAll('dialog').length === 0, null, ESPERA);
   assert.equal(await noApp(), true);
