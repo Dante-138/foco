@@ -232,7 +232,8 @@ ul {
 .abas {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   height: calc(var(--abas-h) + var(--base-segura));
   padding-bottom: var(--base-segura);
   background: var(--barra);
@@ -1024,6 +1025,92 @@ ul {
   padding: 0 14px 0 16px;
   font-weight: 600;
   color: var(--texto-2);
+}
+
+/* ---------------------------------------------------------------- painel */
+
+.painel-data {
+  padding: 2px 16px 12px;
+  color: var(--texto-2);
+  font-size: 14px;
+}
+
+.painel-data::first-letter {
+  text-transform: uppercase;
+}
+
+.painel-bloco {
+  padding: 8px 0 6px;
+}
+
+.painel-topo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px 6px;
+}
+
+.painel-anel {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--acento);
+  line-height: 0;
+}
+
+.painel-anel b {
+  position: absolute;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--texto);
+}
+
+.painel-rotina {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.painel-rotina small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--texto-2);
+}
+
+.painel-pronto {
+  padding: 8px 16px;
+  color: var(--texto-2);
+}
+
+.painel-ver {
+  margin: 2px 8px 2px;
+}
+
+.painel-contadores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 12px 10px;
+}
+
+.painel-contador {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--sup-1);
+  text-align: left;
+  font-size: 13px;
+  color: var(--texto-2);
+}
+
+.painel-contador b {
+  font-size: 22px;
+  color: var(--texto);
 }
 
 /* ---------------------------------------------------------------- folhas */
