@@ -511,6 +511,68 @@ test('rotina: "Excluir itens marcados" e "Desmarcar todos" no menu, como no Keep
   assert.deepEqual(erros, []);
 });
 
+test('rotina: na edição, a alça arrasta um item para outra seção e uma seção com o bloco inteiro', async (t) => {
+  const item = (id, texto) => ({ id, tipo: 'item', texto, hora: null, habitoId: null });
+  const secao = (id, texto) => ({ id, tipo: 'secao', texto, hora: null, habitoId: null });
+  const salvo = JSON.stringify({
+    versao: 5,
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          secao('s1', 'ACORDAR'),
+          item('i1', 'Levantar'),
+          item('i2', 'Beber água'),
+          secao('s2', 'SAIR'),
+          item('i3', 'Pegar a chave'),
+        ],
+      },
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const linha = (id) => pagina.locator(`.edicao li[data-linha="${id}"]`);
+  const centro = async (alvo) => {
+    const caixa = await alvo.boundingBox();
+    return [caixa.x + caixa.width / 2, caixa.y + caixa.height / 2];
+  };
+  // Pega a alça da linha "de" e solta um pouco acima do meio da linha "ate".
+  const arrastar = async (de, ate) => {
+    const [x, y] = await centro(linha(de).locator('.alca'));
+    const caixa = await linha(ate).boundingBox();
+    await pagina.mouse.move(x, y);
+    await pagina.mouse.down();
+    await pagina.mouse.move(x, caixa.y + caixa.height * 0.3, { steps: 12 });
+    await pagina.mouse.up();
+  };
+  const ordem = async () => JSON.parse(await lerSalvo(pagina, CHAVE)).rotinas[0].itens.map((i) => i.texto);
+
+  await botao(pagina, 'Editar itens').click();
+
+  // Item de SAIR para dentro de ACORDAR, antes de "Levantar".
+  await arrastar('i3', 'i1'); // Pegar a chave, para antes de Levantar
+  await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
+  assert.deepEqual(await ordem(), ['ACORDAR', 'Pegar a chave', 'Levantar', 'Beber água', 'SAIR']);
+
+  // Seção SAIR (agora vazia) para cima de ACORDAR: o bloco de ACORDAR vem junto atrás dela.
+  await arrastar('s2', 's1'); // SAIR, para antes de ACORDAR
+  await pagina.waitForFunction(() => !document.querySelector('.arrastando'), null, ESPERA);
+  assert.deepEqual(await ordem(), ['SAIR', 'ACORDAR', 'Pegar a chave', 'Levantar', 'Beber água']);
+
+  // Desfazer da edição volta o último arraste.
+  await botao(pagina, 'Desfazer edição').click();
+  assert.deepEqual(await ordem(), ['ACORDAR', 'Pegar a chave', 'Levantar', 'Beber água', 'SAIR']);
+
+  await botao(pagina, 'Concluir edição').click();
+  await visivel(pagina.getByText('0 de 3 hoje'));
+  assert.deepEqual(await pagina.locator('.area-pendentes .rotina-texto').allTextContents(), [
+    'Pegar a chave',
+    'Levantar',
+    'Beber água',
+  ]);
+  assert.deepEqual(erros, []);
+});
+
 test('rotina: fazer uma cópia (sem as marcas do dia) e mover a rotina na faixa', async (t) => {
   const { pagina, erros } = await abrir(t);
   const nomes = async () => (await pagina.locator('.faixa .chip').allTextContents()).slice(0, -1); // o último é "Nova rotina"
@@ -1177,6 +1239,97 @@ test('tarefa: ao concluir, a linha mostra a marca e o risco antes de sair da lis
   await visivel(pagina.getByText('0 pendentes', { exact: true }));
   await visivel(botao(pagina, 'Concluídas (1)'));
   assert.equal(await pagina.locator('.tarefa.concluindo').count(), 0);
+  assert.deepEqual(erros, []);
+});
+
+// ------------------------------------------------------------------- painel
+
+test('painel: anel da rotina, hábitos e tarefas de hoje; marca e conclui ali e leva às abas', async (t) => {
+  const dia = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  const item = (id, texto, hora = null) => ({ id, tipo: 'item', texto, hora, habitoId: null });
+  const tarefa = (id, titulo, prazo, extra = {}) => ({
+    id,
+    listaId: 'l',
+    titulo,
+    notas: '',
+    prazo,
+    hora: null,
+    estrela: false,
+    feita: false,
+    criadaEm: Number(id.slice(1)),
+    feitaEm: null,
+    ...extra,
+  });
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'painel',
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          item('i1', 'Levantar', '06:30'),
+          item('i2', 'Beber água'),
+          item('i3', 'Arrumar a cama'),
+          item('i4', 'Sair'),
+        ],
+      },
+    ],
+    habitos: [
+      { id: 'h1', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
+      { id: 'h2', nome: 'Água', cor: 'azul', tipo: 'simnao' },
+      { id: 'h3', nome: 'Antigo', cor: 'azul', tipo: 'simnao', arquivado: true },
+    ],
+    registros: { h1: { [dia]: 'feito' } },
+    listas: [{ id: 'l', nome: 'Faculdade' }],
+    tarefas: [
+      tarefa('t1', 'Entregar o relatório', '2020-01-02'),
+      tarefa('t2', 'Prova', dia, { hora: '19:30' }),
+      tarefa('t3', 'Coisa do futuro', '2099-01-01'),
+      tarefa('t4', 'Já feita', dia, { feita: true, feitaEm: 5 }),
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const contador = (inicio) => pagina.locator('.painel-contador', { hasText: inicio }).locator('b');
+
+  assert.equal(await pagina.title(), 'Painel - Foco');
+  await visivel(pagina.getByRole('img', { name: '0% da rotina feita' }));
+  assert.equal(await contador('Hábitos').textContent(), '1 de 2');
+  assert.equal(await contador('Tarefas').textContent(), '2');
+  await visivel(pagina.getByText('Tarefas (1 atrasada)'));
+  assert.deepEqual(await pagina.locator('.painel-bloco .tarefa-titulo').allTextContents(), [
+    'Entregar o relatório',
+    'Prova',
+  ]);
+  assert.deepEqual(await pagina.locator('.painel-bloco .rotina-texto').allTextContents(), [
+    'Levantar',
+    'Beber água',
+    'Arrumar a cama',
+  ]);
+
+  // Marcar um item ali mesmo anda o anel e vale na aba Rotinas.
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await visivel(pagina.getByRole('img', { name: '25% da rotina feita' }));
+  assert.deepEqual(await pagina.locator('.painel-bloco .rotina-texto').allTextContents(), [
+    'Beber água',
+    'Arrumar a cama',
+    'Sair',
+  ]);
+
+  // Concluir uma tarefa ali mesmo.
+  await pagina.getByRole('checkbox', { name: 'Concluir: Prova' }).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.painel-bloco .tarefa').length === 1,
+    null,
+    ESPERA,
+  );
+  assert.equal(await contador('Tarefas').textContent(), '1');
+
+  // O + do painel cria tarefa; "Ver rotina completa" leva à aba Rotinas.
+  assert.equal(await pagina.locator('#fab').getAttribute('aria-label'), 'Nova tarefa');
+  await botao(pagina, 'Ver rotina completa').click();
+  await esperarTitulo(pagina, 'Rotinas - Foco');
+  await visivel(pagina.getByText('1 de 4 hoje'));
   assert.deepEqual(erros, []);
 });
 

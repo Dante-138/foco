@@ -6,8 +6,14 @@ import { estado, salvar } from './store.js';
 import { uid } from './nucleo/ids.js';
 import { horaValida } from './nucleo/datas.js';
 import { LIMITES } from './nucleo/esquema.js';
-import { emBlocos } from './nucleo/rotina-ordem.js';
-import { inserirDepois, inserirNoFimDoBloco, limparVazios, remover } from './nucleo/rotina-edicao.js';
+import { emBlocos, moverSecao } from './nucleo/rotina-ordem.js';
+import {
+  inserirDepois,
+  inserirNoFimDoBloco,
+  limparVazios,
+  naOrdem,
+  remover,
+} from './nucleo/rotina-edicao.js';
 import { h, icone, avisar, redesenhar } from './ui.js';
 
 // Desfazer e refazer da edição: fotos do nome e dos itens da rotina. Uma foto é tirada
@@ -182,7 +188,8 @@ function linhaDoItem(rotina, item, aoRemoverItem) {
   });
   return h(
     'li',
-    { class: 'edicao-item' },
+    { class: 'edicao-item', 'data-linha': item.id },
+    alca(),
     hora,
     campoDeTexto(rotina, item, aoRemoverItem),
     botaoExcluir(rotina, item, aoRemoverItem),
@@ -207,6 +214,90 @@ function botaoDeAdicionar(rotina, idDaSecao) {
   );
 }
 
+// ------------------------------------------------------------- arrastar
+
+// Alça de arrastar, no começo de cada linha. Só ela inicia o arraste: no resto da linha
+// o dedo rola a lista e edita os campos.
+const alca = () => h('span', { class: 'alca', 'aria-hidden': 'true' }, icone('alca', { tam: 18 }));
+
+// Perto da borda de cima ou de baixo da área rolável, a lista rola sozinha.
+function rolarSePerto(y) {
+  const area = document.getElementById('conteudo');
+  const caixa = area.getBoundingClientRect();
+  if (y < caixa.top + 56) area.scrollTop -= 12;
+  else if (y > caixa.bottom - 56) area.scrollTop += 12;
+}
+
+// Linhas que vão junto com uma seção: os itens dela e o "Adicionar item" do bloco.
+function linhasDoBloco(cabecalho) {
+  const linhas = [];
+  for (
+    let el = cabecalho.nextElementSibling;
+    el && !el.classList.contains('edicao-secao');
+    el = el.nextElementSibling
+  ) {
+    if (el === el.parentElement.lastElementChild) break; // "Nova seção"
+    linhas.push(el);
+  }
+  return linhas;
+}
+
+// Arraste de uma linha: o item pode ir para qualquer lugar (outra seção, ou antes da
+// primeira seção); a seção leva o bloco inteiro e só troca de lugar com outras seções.
+// A linha muda de posição na tela enquanto o dedo anda; ao soltar, a rotina segue a tela.
+function arrastar(lista, rotina, linha, inicio) {
+  const ehSecao = linha.classList.contains('edicao-secao');
+  const secoesAntes = [...lista.querySelectorAll('li.edicao-secao')];
+  const juntas = ehSecao ? linhasDoBloco(linha) : [];
+  for (const el of juntas) el.hidden = true;
+  linha.classList.add('arrastando');
+  const seletor = ehSecao ? 'li.edicao-secao' : 'li.edicao-item, li.edicao-secao';
+  const fim = lista.lastElementChild;
+
+  const mover = (e) => {
+    const outras = [...lista.querySelectorAll(seletor)].filter((el) => el !== linha && !el.hidden);
+    const acima = outras.filter((el) => {
+      const caixa = el.getBoundingClientRect();
+      return caixa.top + caixa.height / 2 < e.clientY;
+    }).length;
+    const alvo = outras[acima] ?? fim;
+    if (linha.nextElementSibling !== alvo) lista.insertBefore(linha, alvo);
+    rolarSePerto(e.clientY);
+  };
+
+  const soltar = () => {
+    window.removeEventListener('pointermove', mover);
+    window.removeEventListener('pointerup', soltar);
+    window.removeEventListener('pointercancel', soltar);
+    registrar(rotina);
+    if (ehSecao) {
+      const para = [...lista.querySelectorAll('li.edicao-secao')].indexOf(linha);
+      rotina.itens = moverSecao(rotina.itens, secoesAntes.indexOf(linha), para);
+    } else {
+      const ids = [...lista.querySelectorAll('li.edicao-item, li.edicao-secao')].map(
+        (el) => el.dataset.linha,
+      );
+      rotina.itens = naOrdem(rotina.itens, ids);
+    }
+    salvar();
+    redesenhar();
+  };
+
+  window.addEventListener('pointermove', mover);
+  window.addEventListener('pointerup', soltar);
+  window.addEventListener('pointercancel', soltar);
+  mover(inicio);
+}
+
+function ligarArraste(lista, rotina) {
+  lista.addEventListener('pointerdown', (e) => {
+    const pega = e.target.closest('.alca');
+    if (!pega || e.button > 0) return;
+    e.preventDefault();
+    arrastar(lista, rotina, pega.closest('li'), e);
+  });
+}
+
 // A lista em modo de edição: seções, itens, "Adicionar item" no fim de cada bloco e "Nova seção".
 export function listaEmEdicao(rotina, { aoRemoverItem }) {
   const linhas = [];
@@ -215,7 +306,8 @@ export function listaEmEdicao(rotina, { aoRemoverItem }) {
       linhas.push(
         h(
           'li',
-          { class: 'edicao-secao' },
+          { class: 'edicao-secao', 'data-linha': bloco.secao.id },
+          alca(),
           campoDeTexto(rotina, bloco.secao, aoRemoverItem),
           botaoExcluir(rotina, bloco.secao, aoRemoverItem),
         ),
@@ -250,8 +342,9 @@ export function listaEmEdicao(rotina, { aoRemoverItem }) {
   if (focarEm) {
     const id = focarEm;
     focarEm = null;
-    queueMicrotask(() => lista.querySelector(`[data-id="${CSS.escape(id)}"]`)?.focus());
+    queueMicrotask(() => lista.querySelector(`.campo-texto[data-id="${CSS.escape(id)}"]`)?.focus());
   }
+  ligarArraste(lista, rotina);
   return lista;
 }
 
