@@ -1,0 +1,43 @@
+name: Melhoria
+description: Uma função nova ou uma mudança em algo que já existe.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        O repositório é público. Não cole dados reais (hábitos, tarefas, rotinas) nem prints com eles: use dados de exemplo.
+  - type: textarea
+    id: problema
+    attributes:
+      label: Que problema isso resolve
+      description: O que hoje atrapalha ou falta, em uma ou duas frases.
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: O que entra
+      description: O comportamento esperado, do ponto de vista de quem usa o app.
+    validations:
+      required: true
+  - type: textarea
+    id: fora
+    attributes:
+      label: Fora do escopo
+      description: O que fica de fora de propósito.
+  - type: dropdown
+    id: formato
+    attributes:
+      label: Muda o formato dos dados?
+      description: Campo novo ou diferente no que o app salva exige versão nova do formato e migração.
+      options:
+        - Não
+        - Sim
+        - Não sei
+    validations:
+      required: true
+  - type: textarea
+    id: pronto
+    attributes:
+      label: Como saber que está pronto
+      description: O que testar no celular para dar a melhoria como entregue.

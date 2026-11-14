@@ -1,0 +1,51 @@
+name: Defeito
+description: Algo no app não funciona como deveria.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        O repositório é público. Não cole dados reais (hábitos, tarefas, rotinas) nem prints com eles: use dados de exemplo.
+  - type: textarea
+    id: o-que-aconteceu
+    attributes:
+      label: O que aconteceu
+      description: O que você viu e o que esperava ver.
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. Abrir a aba ...
+        2. Tocar em ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: versao
+    attributes:
+      label: Versão do app
+      description: Número da versão ou commit do APK instalado, se souber.
+  - type: input
+    id: aparelho
+    attributes:
+      label: Aparelho e versão do Android
+      placeholder: Galaxy A36, Android 16
+  - type: dropdown
+    id: dados
+    attributes:
+      label: Os dados foram afetados?
+      description: Defeito que perde ou altera dado salvo tem prioridade sobre os outros.
+      options:
+        - Não
+        - Sim, algo sumiu ou mudou sozinho
+        - Não sei
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Mais alguma coisa
+      description: Print com dados de exemplo, mensagem de erro, o que já foi tentado.
