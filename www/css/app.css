@@ -543,6 +543,95 @@ ul {
   font-size: 14px;
 }
 
+/* Edição na própria lista: cada linha é um campo, como no Keep. */
+.edicao li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 12px;
+}
+
+.edicao .edicao-secao {
+  padding-top: 10px;
+}
+
+.edicao input {
+  min-width: 0;
+  padding: 8px 6px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--texto);
+  font: inherit;
+}
+
+.edicao input:focus {
+  outline: none;
+  border-bottom-color: var(--acento);
+}
+
+/* Alça de arrastar: o dedo nela move a linha em vez de rolar a lista. */
+.alca {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 40px;
+  margin-left: -8px;
+  color: var(--texto-3);
+  cursor: grab;
+  touch-action: none;
+}
+
+.edicao li.arrastando {
+  position: relative;
+  z-index: 3;
+  border-radius: 10px;
+  background: var(--sup-2);
+  box-shadow: 0 4px 14px var(--sombra);
+}
+
+.campo-hora {
+  flex: none;
+  width: 92px;
+  color: var(--texto-2) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.campo-texto {
+  flex: 1;
+}
+
+.campo-secao {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--acento) !important;
+}
+
+.botao-icone.pequeno {
+  width: 36px;
+  height: 36px;
+}
+
+.edicao-adicionar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 6px;
+  font-size: 14px;
+  color: var(--texto-2);
+}
+
+.campo-nome {
+  padding: 8px 10px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
 .rotina-item.feito .caixa {
   background: var(--acento);
   border-color: var(--acento);

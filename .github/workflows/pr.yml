@@ -1,0 +1,32 @@
+name: PR
+
+# Regras do próprio pull request, que não dependem do código.
+# Roda também quando o PR é editado ("edited"), porque a base pode ser trocada depois de aberto.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+# Este workflow não lê o repositório nem escreve nada.
+permissions: {}
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Todo PR entra pela main: uma mudança por vez, sem pilha de PRs.
+  # Mesclar um PR em outra branch não passa pela proteção da main, e a mudança fica fora dela.
+  base:
+    name: Base
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: A base do PR é a main
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE" != "main" ]; then
+            echo "::error title=Base errada::Este PR aponta para '$BASE'. Todo PR tem a main como base: uma mudança por vez, sem pilha."
+            exit 1
+          fi
+          echo "Base: main."

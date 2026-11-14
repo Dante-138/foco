@@ -56,9 +56,25 @@ const ICONES = {
   cima: [['path', { d: 'M6 14.5l6-6 6 6' }]],
   baixo: [['path', { d: 'M6 9.5l6 6 6-6' }]],
   filtro: [['path', { d: 'M4 7h16M7 12h10M10 17h4' }]],
+  lapis: [
+    ['path', { d: 'M4.5 19.5l1-4.2L16 4.8a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.7 18.5z' }],
+    ['path', { d: 'M14 6.8l3.2 3.2' }],
+  ],
   elo: [
     ['path', { d: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1' }],
     ['path', { d: 'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1' }],
+  ],
+  refazer: [
+    ['path', { d: 'M15 6.5l5 5-5 5' }],
+    ['path', { d: 'M20 11.5H10a4.5 4.5 0 0 0 0 9h3' }],
+  ],
+  alca: [
+    ponto(6),
+    ponto(12),
+    ponto(18),
+    ['circle', { cx: 16, cy: 6, r: 1.7, fill: 'currentColor', stroke: 'none' }],
+    ['circle', { cx: 16, cy: 12, r: 1.7, fill: 'currentColor', stroke: 'none' }],
+    ['circle', { cx: 16, cy: 18, r: 1.7, fill: 'currentColor', stroke: 'none' }],
   ],
   desfazer: [
     ['path', { d: 'M9 6.5l-5 5 5 5' }],
