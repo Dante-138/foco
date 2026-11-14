@@ -31,13 +31,17 @@ after(async () => {
 // Abre o app em um contexto isolado. "salvo" é o texto gravado no
 // armazenamento antes de o app carregar (undefined = nada salvo). "toque" liga a
 // tela de toque no navegador, para os testes de gesto.
-async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false, preparar } = {}) {
+async function abrir(t, { salvo, esquemaDeCor = 'dark', toque = false, celular = false, preparar } = {}) {
   const contexto = await navegador.newContext({
     viewport: { width: 500, height: 1000 },
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     colorScheme: esquemaDeCor,
-    hasTouch: toque,
+    hasTouch: toque || celular,
+    // celular: tela do Galaxy A36 com a regra de janela do Chrome do Android (meta viewport).
+    ...(celular
+      ? { isMobile: true, viewport: { width: 501, height: 1085 }, deviceScaleFactor: 2.15625 }
+      : {}),
   });
   t.after(() => contexto.close());
   await preparar?.(contexto); // para o teste instalar algo antes de o app carregar
@@ -1242,6 +1246,97 @@ test('tarefa: ao concluir, a linha mostra a marca e o risco antes de sair da lis
   assert.deepEqual(erros, []);
 });
 
+// ------------------------------------------------------------------- painel
+
+test('painel: anel da rotina, hábitos e tarefas de hoje; marca e conclui ali e leva às abas', async (t) => {
+  const dia = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  const item = (id, texto, hora = null) => ({ id, tipo: 'item', texto, hora, habitoId: null });
+  const tarefa = (id, titulo, prazo, extra = {}) => ({
+    id,
+    listaId: 'l',
+    titulo,
+    notas: '',
+    prazo,
+    hora: null,
+    estrela: false,
+    feita: false,
+    criadaEm: Number(id.slice(1)),
+    feitaEm: null,
+    ...extra,
+  });
+  const salvo = JSON.stringify({
+    versao: 5,
+    aba: 'painel',
+    rotinas: [
+      {
+        id: 'r',
+        nome: 'Manhã',
+        itens: [
+          item('i1', 'Levantar', '06:30'),
+          item('i2', 'Beber água'),
+          item('i3', 'Arrumar a cama'),
+          item('i4', 'Sair'),
+        ],
+      },
+    ],
+    habitos: [
+      { id: 'h1', nome: 'Leitura', cor: 'azul', tipo: 'simnao' },
+      { id: 'h2', nome: 'Água', cor: 'azul', tipo: 'simnao' },
+      { id: 'h3', nome: 'Antigo', cor: 'azul', tipo: 'simnao', arquivado: true },
+    ],
+    registros: { h1: { [dia]: 'feito' } },
+    listas: [{ id: 'l', nome: 'Faculdade' }],
+    tarefas: [
+      tarefa('t1', 'Entregar o relatório', '2020-01-02'),
+      tarefa('t2', 'Prova', dia, { hora: '19:30' }),
+      tarefa('t3', 'Coisa do futuro', '2099-01-01'),
+      tarefa('t4', 'Já feita', dia, { feita: true, feitaEm: 5 }),
+    ],
+  });
+  const { pagina, erros } = await abrir(t, { salvo });
+  const contador = (inicio) => pagina.locator('.painel-contador', { hasText: inicio }).locator('b');
+
+  assert.equal(await pagina.title(), 'Painel - Foco');
+  await visivel(pagina.getByRole('img', { name: '0% da rotina feita' }));
+  assert.equal(await contador('Hábitos').textContent(), '1 de 2');
+  assert.equal(await contador('Tarefas').textContent(), '2');
+  await visivel(pagina.getByText('Tarefas (1 atrasada)'));
+  assert.deepEqual(await pagina.locator('.painel-bloco .tarefa-titulo').allTextContents(), [
+    'Entregar o relatório',
+    'Prova',
+  ]);
+  assert.deepEqual(await pagina.locator('.painel-bloco .rotina-texto').allTextContents(), [
+    'Levantar',
+    'Beber água',
+    'Arrumar a cama',
+  ]);
+
+  // Marcar um item ali mesmo anda o anel e vale na aba Rotinas.
+  await pagina.getByRole('checkbox', { name: /Levantar/ }).click();
+  await visivel(pagina.getByRole('img', { name: '25% da rotina feita' }));
+  assert.deepEqual(await pagina.locator('.painel-bloco .rotina-texto').allTextContents(), [
+    'Beber água',
+    'Arrumar a cama',
+    'Sair',
+  ]);
+
+  // Concluir uma tarefa ali mesmo.
+  await pagina.getByRole('checkbox', { name: 'Concluir: Prova' }).click();
+  await pagina.waitForFunction(
+    () => document.querySelectorAll('.painel-bloco .tarefa').length === 1,
+    null,
+    ESPERA,
+  );
+  assert.equal(await contador('Tarefas').textContent(), '1');
+
+  // O + do painel cria tarefa; "Ver rotina completa" leva à aba Rotinas.
+  assert.equal(await pagina.locator('#fab').getAttribute('aria-label'), 'Nova tarefa');
+  await botao(pagina, 'Ver rotina completa').click();
+  await esperarTitulo(pagina, 'Rotinas - Foco');
+  await visivel(pagina.getByText('1 de 4 hoje'));
+  assert.deepEqual(erros, []);
+});
+
 // ----------------------------------------------------------------- lembretes
 
 test('lembretes: a primeira tarefa com data pede a permissão e agenda o aviso; concluir cancela', async (t) => {
@@ -1662,6 +1757,38 @@ test('deslizar o dedo para o lado troca de aba e para nas pontas', async (t) => 
   await deslizar(pagina, [250, 500], [280, 500]);
   await visivel(pagina.getByText('Nenhum hábito ainda'));
   assert.equal(await pagina.title(), 'Hábitos - Foco');
+  assert.deepEqual(erros, []);
+});
+
+test('trocar de aba não tira o botão + do lugar, nem por um quadro (Chrome do Android)', async (t) => {
+  // Regressão: a animação de entrada desloca o conteúdo 28 px para a direita. Sem o corte na raiz
+  // da página, o Chrome do Android alarga a janela de layout e o + pula por uns 200 ms.
+  const { pagina, erros } = await abrir(t, { celular: true });
+  await visivel(pagina.getByText('Nenhuma rotina ainda'));
+  // Todas as abas da barra, da esquerda para a direita e de volta: as duas direções da animação.
+  const nomes = (await pagina.locator('#abas button').allTextContents()).map((nome) => nome.trim());
+  assert.ok(nomes.length >= 3, `abas na barra: ${nomes.join(', ')}`);
+  for (const destino of [...nomes, ...nomes.toReversed().slice(1)]) {
+    const posicoes = await pagina.evaluate(async (nome) => {
+      const fab = document.getElementById('fab');
+      const vistas = new Set();
+      const anotar = () => {
+        const r = fab.getBoundingClientRect();
+        vistas.add(`${Math.round(r.left)},${Math.round(r.top)}`);
+      };
+      anotar();
+      [...document.querySelectorAll('#abas button')].find((b) => b.textContent.trim() === nome).click();
+      const t0 = performance.now();
+      while (performance.now() - t0 < 400) {
+        anotar();
+        await new Promise((f) => {
+          requestAnimationFrame(f);
+        });
+      }
+      return [...vistas];
+    }, destino);
+    assert.equal(posicoes.length, 1, `indo para ${destino}, o + passou por ${posicoes.join(' | ')}`);
+  }
   assert.deepEqual(erros, []);
 });
 
