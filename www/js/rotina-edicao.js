@@ -14,7 +14,7 @@ import {
   naOrdem,
   remover,
 } from './nucleo/rotina-edicao.js';
-import { h, icone, avisar, redesenhar } from './ui.js';
+import { h, icone, avisar, redesenhar, vibrar } from './ui.js';
 
 // Desfazer e refazer da edição: fotos do nome e dos itens da rotina. Uma foto é tirada
 // antes de cada mudança de estrutura (criar ou tirar linha) e quando um campo recebe o
@@ -251,6 +251,7 @@ function arrastar(lista, rotina, linha, inicio) {
   const juntas = ehSecao ? linhasDoBloco(linha) : [];
   for (const el of juntas) el.hidden = true;
   linha.classList.add('arrastando');
+  vibrar('arrastar');
   const seletor = ehSecao ? 'li.edicao-secao' : 'li.edicao-item, li.edicao-secao';
   const fim = lista.lastElementChild;
 
