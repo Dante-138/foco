@@ -109,6 +109,10 @@ A regra vale também para o dono do repositório. O portão confere, nesta ordem
 
 O merge é sempre por squash: cada pull request vira um commit na `main`, com o título do PR.
 
+Todo pull request tem a `main` como base: uma mudança por vez, sem pilha de PRs. O job `Base`
+reprova o PR que aponta para outra branch, inclusive quando a base é trocada depois de aberto.
+Mesclar em outra branch não passa pela proteção da `main`, e a mudança fica fora dela.
+
 ## Estrutura
 
 O código tem duas camadas, e o lint impede que elas se misturem.

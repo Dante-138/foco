@@ -87,7 +87,8 @@ function ligarDeslize() {
     (e) => {
       // Com dois dedos não é deslize. Dentro de uma faixa que rola para os lados
       // (rotinas, listas), o gesto é da faixa.
-      const vale = e.touches.length === 1 && !e.target.closest('.faixa');
+      // Na edição da rotina o dedo pode estar selecionando texto num campo.
+      const vale = e.touches.length === 1 && !e.target.closest('.faixa, .edicao');
       inicio = vale ? { x: e.touches[0].clientX, y: e.touches[0].clientY, quando: e.timeStamp } : null;
     },
     { passive: true },
