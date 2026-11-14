@@ -347,7 +347,7 @@ export function aoSegurar(elemento, acao) {
     if (disparou) return;
     disparou = true;
     cancelar();
-    vibrar('toque');
+    vibrar('segurar');
     acao();
   };
   elemento.addEventListener('pointerdown', () => {
@@ -373,14 +373,22 @@ export function aoSegurar(elemento, acao) {
   );
 }
 
-// Resposta tátil: um toque curto ao marcar, dois pulsos ao concluir.
-// Só vibra onde o aparelho tem motor e o app tem permissão (no Android, VIBRATE);
-// nos outros lugares a chamada não faz nada.
-const VIBRACAO = { toque: 8, concluido: [12, 70, 22] };
+// Resposta tátil. No app Android vai pelo plugin local Haptica (HapticaPlugin.java), que usa os
+// efeitos do próprio sistema e segue a opção de vibração ao toque do aparelho. No navegador,
+// navigator.vibrate faz um toque curto. Tipos: marcar, desmarcar, concluido, segurar, arrastar.
+// Chamadas a menos de 80 ms da anterior são ignoradas: vibração em rajada vira zumbido.
+const VIBRACAO = { marcar: 8, desmarcar: 6, concluido: [12, 70, 22], segurar: 12, arrastar: 10 };
+const INTERVALO_MINIMO_MS = 80;
+let ultimaVibracao = -Infinity;
 
 export function vibrar(tipo) {
+  const agora = performance.now();
+  if (agora - ultimaVibracao < INTERVALO_MINIMO_MS) return;
+  ultimaVibracao = agora;
+  const sistema = window.Capacitor?.Plugins?.Haptica;
   try {
-    navigator.vibrate?.(VIBRACAO[tipo]);
+    if (sistema) sistema.tocar({ tipo })?.catch?.(() => {});
+    else navigator.vibrate?.(VIBRACAO[tipo]);
   } catch {
     /* sem vibração neste aparelho */
   }
