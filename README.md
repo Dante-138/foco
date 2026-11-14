@@ -50,10 +50,21 @@ o executor nativo do Node; os de ponta a ponta abrem o Google Chrome instalado n
 ```bash
 npm install         # uma vez
 npm run dev         # servidor local em http://localhost:8137
-npm run check       # lint, formatação, testes de unidade e de ponta a ponta
-npm run commits     # confere as mensagens de commit do branch contra a main
+npm run check       # o portão inteiro: commits, lint, formatação, testes de unidade e de ponta a ponta
+npm run commits     # só as mensagens de commit do branch, contra a origin/main
 npm run format      # formata o código com o Prettier
 ```
+
+O repositório traz um gancho de `pre-push` (pasta `.githooks`) que confere as mensagens dos
+commits antes de eles saírem da máquina. Ative uma vez por clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Vale a pena porque commit enviado com mensagem fora do padrão não tem conserto simples: a
+`main` e os branches enviados não aceitam reescrita de histórico, então o jeito é refazer o
+branch com outro nome.
 
 ## APK Android
 

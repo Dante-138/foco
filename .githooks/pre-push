@@ -1,0 +1,23 @@
+#!/bin/sh
+# Gancho de pre-push: confere as mensagens dos commits que estão saindo, contra a origin/main,
+# com a mesma regra do CI (tools/verificar-commits.mjs).
+#
+# Ativar uma vez por clone:   git config core.hooksPath .githooks
+#
+# O git entrega na entrada uma linha por referência enviada:
+#   <ref local> <commit local> <ref remota> <commit remoto>
+# Conferir o commit enviado, e não o HEAD, cobre o push de um branch que não é o aberto.
+
+zeros=0000000000000000000000000000000000000000
+resultado=0
+
+while read -r _ref_local commit_local _ref_remota _commit_remoto; do
+  # Apagar um branch remoto não envia commit nenhum.
+  [ "$commit_local" = "$zeros" ] && continue
+  node tools/verificar-commits.mjs origin/main "$commit_local" || resultado=1
+done
+
+if [ "$resultado" -ne 0 ]; then
+  echo "pre-push: mensagem de commit reprovada. Nada foi enviado." >&2
+fi
+exit "$resultado"
